@@ -1,0 +1,3 @@
+{"errors":[{"type":"field","msg":"Enter a valid email","path":"email","location":"body"},{"type":"field","msg":"Username is required","path":"username","location":"body"},{"type":"field","msg":"Password must be at least 6 characters long","path":"password","location":"body"}]}--_curl_--"email": "test@gmail.com"
+--_curl_-- "username": "test"
+--_curl_-- "password": "password"
