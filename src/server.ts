@@ -8,6 +8,7 @@ import { Pool } from "pg";
 import { body, validationResult } from "express-validator";
 
 dotenv.config();
+
 const app = express();
 const server = require("http").createServer(app);
 const io = new Server(server, {
@@ -34,39 +35,80 @@ app.use(express.json());
 app.use(cors());
 
 /* WebSocket Connection */
+
 io.on("connection", (socket) => {
-  console.log(` User Connected: ${socket.id}`);
+  console.log(`🟢 User Connected: ${socket.id}`);
 
-  // Listen for incoming messages
-  socket.on("sendMessage", async ({ userId, message }) => {
-    if (!userId || !message) return;
+  socket.on("joinRoom", async ({ channelId }) => {
+    console.log(`🔹 User ${socket.id} joined room: ${channelId}`);
+    socket.join(channelId);
 
-    // Save message in PostgreSQL
+    // Fetch existing chat messages for this channel
     const result = await pool.query(
-      "INSERT INTO messages (user_id, content) VALUES ($1, $2) RETURNING *",
-      [userId, message]
+      "SELECT messages.id, messages.content, messages.created_at, users.username FROM messages JOIN users ON messages.user_id = users.id WHERE messages.channel_id = $1 ORDER BY messages.created_at ASC",
+      [channelId]
     );
 
-    // Broadcast message to all clients
-    io.emit("receiveMessage", result.rows[0]);
+    socket.emit("chatHistory", result.rows);
+  });
+
+  socket.on("sendMessage", async ({ userId, message, channelId }) => {
+    console.log(`📨 Received message in room ${channelId}: "${message}" from userId: ${userId}`);
+
+    if (!userId || !message || !channelId) {
+      console.log("❌ Error: Missing userId, message, or channelId!");
+      return;
+    }
+
+    // Fetch username
+    const userResult = await pool.query("SELECT username FROM users WHERE id = $1", [userId]);
+    if (userResult.rows.length === 0) {
+      console.log("❌ No user found for userId:", userId);
+      return;
+    }
+
+    const username = userResult.rows[0].username;
+
+    // Store message in DB with channelId
+    const result = await pool.query(
+      "INSERT INTO messages (user_id, content, channel_id) VALUES ($1, $2, $3) RETURNING *",
+      [userId, message, channelId]
+    );
+
+    const newMessage = {
+      id: result.rows[0].id,
+      content: result.rows[0].content,
+      created_at: result.rows[0].created_at,
+      user: username,
+    };
+
+    console.log(`📢 Broadcasting message to room ${channelId}:`, newMessage);
+
+    // Send the message only to users in the current room
+    io.to(channelId).emit("receiveMessage", newMessage);
   });
 
   socket.on("disconnect", () => {
-    console.log(` User Disconnected: ${socket.id}`);
+    console.log(`❌ User Disconnected: ${socket.id}`);
   });
 });
+
 
 /*  Fetch Chat History */
 app.get("/messages", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT messages.id, messages.content, messages.created_at, users.email FROM messages JOIN users ON messages.user_id = users.id ORDER BY messages.created_at ASC"
+      `SELECT messages.id, messages.content, messages.created_at, users.username 
+       FROM messages 
+       JOIN users ON messages.user_id = users.id 
+       ORDER BY messages.created_at ASC`
     );
     res.json(result.rows);
   } catch (error) {
     res.status(500).json({ error: "Error fetching messages" });
   }
 });
+
 
 /* Register User */
 app.post(
@@ -144,8 +186,10 @@ app.get("/profile", async (req: Request, res: Response, next: NextFunction): Pro
       return;
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { id: string };
-    const result = await pool.query("SELECT email, created_at FROM users WHERE id = $1", [decoded.id]);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { id: number };
+    console.log("Decoded user ID:", decoded.id);
+
+    const result = await pool.query("SELECT id, username, email, created_at FROM users WHERE id = $1", [decoded.id]);
 
     if (result.rows.length === 0) {
       res.status(404).json({ error: "User not found" });
@@ -154,6 +198,7 @@ app.get("/profile", async (req: Request, res: Response, next: NextFunction): Pro
 
     res.json(result.rows[0]);
   } catch (error) {
+    console.error("Error in /profile:", error);
     res.status(401).json({ error: "Invalid Token" });
   }
 });
