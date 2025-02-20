@@ -52,15 +52,16 @@ io.on("connection", (socket) => {
     socket.emit("chatHistory", result.rows);
   });
 
+
   socket.on("sendMessage", async ({ userId, message, channelId }) => {
     console.log(`📨 Received message in room ${channelId}: "${message}" from userId: ${userId}`);
 
     if (!userId || !message || !channelId) {
-      console.log("❌ Error: Missing userId, message, or channelId!");
+      console.log("❌ Error: Missing userId, message, or channelId!", { userId, message, channelId });
       return;
     }
 
-    // Fetch username
+    // Fetch username from the database
     const userResult = await pool.query("SELECT username FROM users WHERE id = $1", [userId]);
     if (userResult.rows.length === 0) {
       console.log("❌ No user found for userId:", userId);
