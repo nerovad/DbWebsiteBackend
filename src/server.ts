@@ -1,22 +1,27 @@
+import dotenv from "dotenv";
+import path from "path";
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { Server } from "socket.io";
 import { Pool } from "pg";
 import { body, validationResult } from "express-validator";
 
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
+console.log("DB_USER:", process.env.DB_USER);
+console.log("DB_PASSWORD:", process.env.DB_PASSWORD ? "Loaded" : "Not Loaded");
+
+
 
 const app = express();
 const server = require("http").createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5174",
+    origin: "http://localhost:5173",
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true
+    credentials: true,
   },
 });
 const PORT = process.env.PORT || 5000;
@@ -37,10 +42,10 @@ app.use(cors());
 /* WebSocket Connection */
 
 io.on("connection", (socket) => {
-  console.log(`🟢 User Connected: ${socket.id}`);
+  console.log(`User Connected: ${socket.id}`);
 
   socket.on("joinRoom", async ({ channelId }) => {
-    console.log(`🔹 User ${socket.id} joined room: ${channelId}`);
+    console.log(`User ${socket.id} joined room: ${channelId}`);
     socket.join(channelId);
 
     // Fetch existing chat messages for this channel
@@ -54,17 +59,17 @@ io.on("connection", (socket) => {
 
 
   socket.on("sendMessage", async ({ userId, message, channelId }) => {
-    console.log(`📨 Received message in room ${channelId}: "${message}" from userId: ${userId}`);
+    console.log(`Received message in room ${channelId}: "${message}" from userId: ${userId}`);
 
     if (!userId || !message || !channelId) {
-      console.log("❌ Error: Missing userId, message, or channelId!", { userId, message, channelId });
+      console.log("Error: Missing userId, message, or channelId!", { userId, message, channelId });
       return;
     }
 
     // Fetch username from the database
     const userResult = await pool.query("SELECT username FROM users WHERE id = $1", [userId]);
     if (userResult.rows.length === 0) {
-      console.log("❌ No user found for userId:", userId);
+      console.log("No user found for userId:", userId);
       return;
     }
 
@@ -83,14 +88,14 @@ io.on("connection", (socket) => {
       user: username,
     };
 
-    console.log(`📢 Broadcasting message to room ${channelId}:`, newMessage);
+    console.log(`Broadcasting message to room ${channelId}:`, newMessage);
 
     // Send the message only to users in the current room
     io.to(channelId).emit("receiveMessage", newMessage);
   });
 
   socket.on("disconnect", () => {
-    console.log(`❌ User Disconnected: ${socket.id}`);
+    console.log(`User Disconnected: ${socket.id}`);
   });
 });
 
