@@ -11,7 +11,9 @@ import voteRoutes from "./routes/voteRoutes";
 import profileRoutes from "./routes/profileRoutes";
 import errorHandler from "./middleware/errorHandler"; // ✅ fixed
 import pool from "./db/pool";
-
+import channelRoutes from "./routes/channelRoutes";
+import festivalRoutes from "./routes/festivalRoutes";
+import filmRoutes from "./routes/filmRoutes";
 
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
@@ -37,6 +39,9 @@ app.use("/api/auth", authRoutes);
 app.use("/api/messages", chatRoutes);
 app.use("/api/sessions", voteRoutes);
 app.use("/api/profile", profileRoutes);
+app.use("/api/channels", channelRoutes);
+app.use("/api/festivals", festivalRoutes);  // sessions control
+app.use("/api/films", filmRoutes);
 
 // Error Handler
 app.use(errorHandler);
