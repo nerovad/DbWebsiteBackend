@@ -10,10 +10,12 @@ import chatRoutes from "./routes/chatRoutes";
 import voteRoutes from "./routes/voteRoutes";
 import profileRoutes from "./routes/profileRoutes";
 import errorHandler from "./middleware/errorHandler"; // ✅ fixed
-import pool from "./db/pool";
+import pool from "../db/pool";
 import channelRoutes from "./routes/channelRoutes";
 import festivalRoutes from "./routes/festivalRoutes";
 import filmRoutes from "./routes/filmRoutes";
+import bodyParser from "body-parser";
+import rtmpRoutes from "./routes/rtmpRoutes";
 
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
@@ -35,6 +37,7 @@ app.use(express.json());
 app.use(cors());
 
 // Routes
+app.use(express.urlencoded({ extended: false }));
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", chatRoutes);
 app.use("/api/sessions", voteRoutes);
@@ -42,6 +45,10 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/channels", channelRoutes);
 app.use("/api/festivals", festivalRoutes);  // sessions control
 app.use("/api/films", filmRoutes);
+app.use("/api/rtmp", rtmpRoutes);
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(express.json());
+app.use(cors());
 
 // Error Handler
 app.use(errorHandler);

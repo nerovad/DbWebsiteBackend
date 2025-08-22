@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
-import pool from "../db/pool";
+import pool from "../../db/pool";
 
 export async function getProfile(req: Request, res: Response): Promise<void> {
   try {

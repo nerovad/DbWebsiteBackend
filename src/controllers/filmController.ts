@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import pool from "../db/pool";
+import pool from "../../db/pool";
 
 export async function createFilm(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
