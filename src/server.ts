@@ -40,7 +40,7 @@ app.use(cors());
 app.use(express.urlencoded({ extended: false }));
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", chatRoutes);
-app.use("/api/sessions", voteRoutes);
+app.use("/api", voteRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/channels", channelRoutes);
 app.use("/api/festivals", festivalRoutes);  // sessions control
