@@ -1,8 +1,27 @@
 import { Request, Response, NextFunction } from "express";
+import jwt from "jsonwebtoken";
 import pool from "../../db/pool";
 import { slugify } from "../utils/slugify";
 import crypto from "crypto";
 
+/* ------------ Auth helper copied to match your profileController style ------------ */
+function authUserIdOr401(req: Request, res: Response): number | null {
+  const h = req.headers.authorization || "";
+  const token = h.startsWith("Bearer ") ? h.slice(7) : null;
+  if (!token) {
+    res.status(401).json({ error: "Access Denied" });
+    return null;
+  }
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { id: number };
+    return decoded.id;
+  } catch {
+    res.status(401).json({ error: "Invalid Token" });
+    return null;
+  }
+}
+
+/* --------------------------------- Utils --------------------------------- */
 function generateStreamKey(): string {
   return crypto.randomBytes(16).toString("hex");
 }
@@ -25,12 +44,16 @@ function parseDurationToSeconds(s?: string): number | null {
 
 /**
  * Create or update a channel, and (optionally) create a session + lineup.
- * - If body has ONLY { name, slug?, stream_url? } => behaves exactly as before.
- * - If body ALSO has { event, films[] } => creates a session and links films.
+ * - Associates the channel with the logged-in user (owner_id).
+ * - Updates are allowed only if the current user owns the channel.
  */
 export async function createChannel(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const uid = authUserIdOr401(req, res);
+  if (!uid) return;
+
   const client = await pool.connect();
   let begun = false;
+
   try {
     let {
       name,
@@ -62,31 +85,59 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
     }
 
     slug = slug ? slugify(slug) : slugify(name!);
-    const streamKey = generateStreamKey();
-    const ingestApp = "live";
-    const playbackPath = `/hls/${streamKey}/index.m3u8`;
 
     await client.query("BEGIN");
     begun = true;
 
-    // 1) Upsert channel (unchanged semantics)
-    const chResult = await client.query(
-      `INSERT INTO channels (slug, name, stream_url, stream_key, ingest_app, playback_path)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (slug)
-       DO UPDATE SET
-          name = EXCLUDED.name,
-          stream_url = EXCLUDED.stream_url,
-          stream_key = channels.stream_key,      -- keep existing
-          ingest_app = channels.ingest_app,      -- keep existing
-          playback_path = channels.playback_path -- keep existing
-       RETURNING id, slug, name, stream_url, stream_key, ingest_app, playback_path, created_at`,
-      [slug, name ?? slug, stream_url ?? null, streamKey, ingestApp, playbackPath]
+    // Check if slug already exists
+    const existing = await client.query(
+      `select id, owner_id, name, stream_url, stream_key, ingest_app, playback_path, created_at
+         from channels
+        where slug = $1
+        limit 1`,
+      [slug]
     );
 
-    const channel = chResult.rows[0];
+    let channel: any;
 
-    // 2) Optionally create session + films + session_entries
+    if (existing.rowCount) {
+      const row = existing.rows[0];
+
+      // Only owner can update this channel
+      if (row.owner_id !== uid) {
+        await client.query("ROLLBACK");
+        begun = false;
+        res.status(409).json({ error: "Channel slug is already in use by another user." });
+        return;
+      }
+
+      // Update name/stream_url only; preserve keys/paths
+      const upd = await client.query(
+        `update channels
+            set name = $2,
+                stream_url = $3
+          where id = $1
+        returning id, slug, name, stream_url, stream_key, ingest_app, playback_path, created_at`,
+        [row.id, name ?? row.name, stream_url ?? row.stream_url]
+      );
+      channel = upd.rows[0];
+
+    } else {
+      // Create a brand-new channel for this owner
+      const streamKey = generateStreamKey();
+      const ingestApp = "live";
+      const playbackPath = `/hls/${streamKey}/index.m3u8`;
+
+      const chResult = await client.query(
+        `insert into channels (owner_id, slug, name, stream_url, stream_key, ingest_app, playback_path, created_at)
+         values ($1,$2,$3,$4,$5,$6,$7, now())
+         returning id, slug, name, stream_url, stream_key, ingest_app, playback_path, created_at`,
+        [uid, slug, name ?? slug, stream_url ?? null, streamKey, ingestApp, playbackPath]
+      );
+      channel = chResult.rows[0];
+    }
+
+    // Optional event + films for session lineup
     const hasEventPayload =
       event &&
       typeof event.title === "string" &&
@@ -100,16 +151,14 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
     let filmRows: Array<{ id: number; title: string }> = [];
 
     if (hasEventPayload && hasFilms) {
-      // Insert a session (festival window)
       const sesResult = await client.query(
-        `INSERT INTO sessions (channel_id, title, starts_at, ends_at, status, created_at)
-         VALUES ($1, $2, $3, $4, 'scheduled', NOW())
-         RETURNING id, channel_id, title, starts_at, ends_at, status`,
+        `insert into sessions (channel_id, title, starts_at, ends_at, status, created_at)
+         values ($1, $2, $3, $4, 'scheduled', now())
+         returning id, channel_id, title, starts_at, ends_at, status`,
         [channel.id, event!.title, event!.starts_at, event!.ends_at ?? null]
       );
       sessionRow = sesResult.rows[0];
 
-      // For each film: find by title (case-insensitive) or insert new; then create lineup row.
       filmRows = [];
       for (let i = 0; i < films!.length; i++) {
         const f = films![i];
@@ -118,7 +167,7 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
         const runtimeSeconds = parseDurationToSeconds(f.duration);
 
         const found = await client.query(
-          `SELECT id, title FROM films WHERE lower(title) = lower($1) LIMIT 1`,
+          `select id, title from films where lower(title) = lower($1) limit 1`,
           [f.title.trim()]
         );
 
@@ -127,10 +176,10 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
           filmId = found.rows[0].id;
         } else {
           const ins = await client.query(
-            `INSERT INTO films (title, creator_user_id, runtime_seconds, created_at)
-             VALUES ($1, NULL, $2, NOW())
-             RETURNING id, title`,
-            [f.title.trim(), runtimeSeconds]
+            `insert into films (title, creator_user_id, runtime_seconds, created_at)
+             values ($1, $2, $3, now())
+             returning id, title`,
+            [f.title.trim(), uid, runtimeSeconds]
           );
           filmId = ins.rows[0].id;
         }
@@ -138,8 +187,8 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
         filmRows.push({ id: filmId, title: f.title.trim() });
 
         await client.query(
-          `INSERT INTO session_entries (session_id, film_id, order_index)
-           VALUES ($1, $2, $3)`,
+          `insert into session_entries (session_id, film_id, order_index)
+           values ($1, $2, $3)`,
           [sessionRow.id, filmId, i]
         );
       }
@@ -154,22 +203,22 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       films: filmRows,
     });
   } catch (err) {
-    try { if (begun) await client.query("ROLLBACK"); } catch { }
+    try { if (begun) await pool.query("ROLLBACK"); } catch { }
     next(err);
   } finally {
     client.release();
   }
 }
 
-/* ===== Keep these named exports so routes compile and frontend works ===== */
+/* ===== Existing endpoints (kept) ===== */
 
 // GET /api/channels  -> must return an ARRAY
 export async function listChannels(_req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { rows } = await pool.query(
-      `SELECT id, slug, name, stream_url, stream_key, ingest_app, playback_path, created_at
-         FROM channels
-        ORDER BY created_at DESC`
+      `select id, slug, name, stream_url, stream_key, ingest_app, playback_path, created_at
+         from channels
+        order by created_at desc`
     );
     res.json(rows);
   } catch (err) {
@@ -182,10 +231,10 @@ export async function getChannel(req: Request, res: Response, next: NextFunction
   try {
     const slug = String(req.params.slug);
     const { rows } = await pool.query(
-      `SELECT id, slug, name, stream_url, stream_key, ingest_app, playback_path, created_at
-         FROM channels
-        WHERE slug = $1
-        LIMIT 1`,
+      `select id, slug, name, stream_url, stream_key, ingest_app, playback_path, created_at
+         from channels
+        where slug = $1
+        limit 1`,
       [slug]
     );
 
@@ -197,11 +246,11 @@ export async function getChannel(req: Request, res: Response, next: NextFunction
     const channel = rows[0];
 
     const session = await pool.query(
-      `SELECT id, title, starts_at, ends_at, status
-         FROM sessions
-        WHERE channel_id = $1
-        ORDER BY starts_at DESC
-        LIMIT 1`,
+      `select id, title, starts_at, ends_at, status
+         from sessions
+        where channel_id = $1
+        order by starts_at desc
+        limit 1`,
       [channel.id]
     );
 
@@ -219,10 +268,10 @@ export async function getIngest(req: Request, res: Response, next: NextFunction)
   try {
     const slug = String(req.params.slug);
     const { rows } = await pool.query(
-      `SELECT slug, stream_key, ingest_app
-         FROM channels
-        WHERE slug = $1
-        LIMIT 1`,
+      `select slug, stream_key, ingest_app
+         from channels
+        where slug = $1
+        limit 1`,
       [slug]
     );
 
@@ -239,7 +288,7 @@ export async function getIngest(req: Request, res: Response, next: NextFunction)
   }
 }
 
-// POST /api/channels/:slug/rotate (if you have this in routes)
+// POST /api/channels/:slug/rotate
 export async function rotateKey(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const slug = String(req.params.slug);
@@ -247,11 +296,11 @@ export async function rotateKey(req: Request, res: Response, next: NextFunction)
     const newPlayback = `/hls/${newKey}/index.m3u8`;
 
     const { rows } = await pool.query(
-      `UPDATE channels
-          SET stream_key = $1,
+      `update channels
+          set stream_key = $1,
               playback_path = $2
-        WHERE slug = $3
-        RETURNING stream_key, playback_path`,
+        where slug = $3
+      returning stream_key, playback_path`,
       [newKey, newPlayback, slug]
     );
 
@@ -264,4 +313,26 @@ export async function rotateKey(req: Request, res: Response, next: NextFunction)
   } catch (err) {
     next(err);
   }
+}
+
+/* ===== NEW: GET /api/channels/mine ===== */
+export async function getMyChannels(req: Request, res: Response): Promise<void> {
+  const uid = authUserIdOr401(req, res);
+  if (!uid) return;
+
+  const r = await pool.query(
+    `select
+       id, slug, name,
+       stream_url,
+       /* fields for the Profile page card shape */
+       null::text as description,
+       false as "isLive",
+       null::text as thumbnail
+     from channels
+     where owner_id = $1
+     order by created_at desc`,
+    [uid]
+  );
+
+  res.json(r.rows);
 }

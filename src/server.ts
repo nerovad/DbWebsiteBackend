@@ -16,6 +16,8 @@ import festivalRoutes from "./routes/festivalRoutes";
 import filmRoutes from "./routes/filmRoutes";
 import bodyParser from "body-parser";
 import rtmpRoutes from "./routes/rtmpRoutes";
+import awardRoutes from "./routes/awardRoutes";
+import companyRoutes from "./routes/companyRoutes";
 
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
@@ -45,6 +47,8 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/channels", channelRoutes);
 app.use("/api/festivals", festivalRoutes);  // sessions control
 app.use("/api/films", filmRoutes);
+app.use("/api/awards", awardRoutes);
+app.use("/api/companies", companyRoutes);
 app.use("/api/rtmp", rtmpRoutes);
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(express.json());
