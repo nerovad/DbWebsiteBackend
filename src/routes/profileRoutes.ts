@@ -3,6 +3,7 @@ import express, { Request, Response, NextFunction } from "express";
 import {
   getProfile,
   updateBio,
+  updateAvatar,  // Add it here
   getMyChannels,
   getMyFilms,
   getMyAwards,
@@ -23,6 +24,11 @@ router.get("/me", (req: AuthRequest, res: Response, next: NextFunction): void =>
 // POST /api/profile/bio - Update bio
 router.post("/bio", (req: AuthRequest, res: Response, next: NextFunction): void => {
   updateBio(req, res).catch(next);
+});
+
+// POST /api/profile/avatar - Update avatar
+router.post("/avatar", (req: AuthRequest, res: Response, next: NextFunction): void => {
+  updateAvatar(req, res).catch(next);
 });
 
 export default router;

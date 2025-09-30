@@ -85,6 +85,26 @@ export async function updateBio(req: AuthRequest, res: Response): Promise<void> 
   }
 }
 
+export async function updateAvatar(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.userId;
+    const { avatarUrl } = req.body;
+
+    await pool.query(
+      `INSERT INTO user_profiles (user_id, avatar_url, updated_at) 
+       VALUES ($1, $2, CURRENT_TIMESTAMP)
+       ON CONFLICT (user_id) 
+       DO UPDATE SET avatar_url = $2, updated_at = CURRENT_TIMESTAMP`,
+      [userId, avatarUrl]
+    );
+
+    res.json({ message: "Avatar updated successfully" });
+  } catch (error) {
+    console.error('Update avatar error:', error);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
 export async function getMyChannels(req: AuthRequest, res: Response): Promise<void> {
   try {
     const userId = req.userId;
