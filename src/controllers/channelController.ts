@@ -59,6 +59,8 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       name,
       slug,
       stream_url,
+      display_name,
+      channel_number,
       // OPTIONAL festival payload
       type,   // "channel" | "festival" (unused for channel insert; accepted for completeness)
       event,  // { kind, title, starts_at, ends_at, voting_mode, require_login }
@@ -67,6 +69,8 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       name: string;
       slug?: string;
       stream_url?: string;
+      display_name?: string;
+      channel_number?: number;
       type?: string;
       event?: {
         kind?: string;
@@ -115,10 +119,12 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       const upd = await client.query(
         `update channels
             set name = $2,
-                stream_url = $3
+                stream_url = $3,
+                display_name = $4,
+                channel_number = $5
           where id = $1
-        returning id, slug, name, stream_url, stream_key, ingest_app, playback_path, created_at`,
-        [row.id, name ?? row.name, stream_url ?? row.stream_url]
+        returning id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, created_at`,
+        [row.id, name ?? row.name, stream_url ?? row.stream_url, display_name ?? row.display_name, channel_number ?? row.channel_number]
       );
       channel = upd.rows[0];
 
@@ -129,10 +135,10 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       const playbackPath = `/hls/${streamKey}/index.m3u8`;
 
       const chResult = await client.query(
-        `insert into channels (owner_id, slug, name, stream_url, stream_key, ingest_app, playback_path, created_at)
-         values ($1,$2,$3,$4,$5,$6,$7, now())
-         returning id, slug, name, stream_url, stream_key, ingest_app, playback_path, created_at`,
-        [uid, slug, name ?? slug, stream_url ?? null, streamKey, ingestApp, playbackPath]
+        `insert into channels (owner_id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, created_at)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9, now())
+        returning id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, created_at`,
+        [uid, slug, name ?? slug, stream_url ?? null, streamKey, ingestApp, playbackPath, display_name ?? null, channel_number ?? null]
       );
       channel = chResult.rows[0];
     }
@@ -322,15 +328,14 @@ export async function getMyChannels(req: Request, res: Response): Promise<void> 
 
   const r = await pool.query(
     `select
-       id, slug, name,
-       stream_url,
-       /* fields for the Profile page card shape */
-       null::text as description,
-       false as "isLive",
-       null::text as thumbnail
-     from channels
-     where owner_id = $1
-     order by created_at desc`,
+      id, slug, name, display_name, channel_number,
+      stream_url,
+      null::text as description,
+      false as "isLive",
+      null::text as thumbnail
+    from channels
+    where owner_id = $1
+    order by created_at desc`,
     [uid]
   );
 
