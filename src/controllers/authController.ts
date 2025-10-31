@@ -4,7 +4,6 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import pool from "../../db/pool";
 
-
 export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const errors = validationResult(req);
@@ -12,23 +11,28 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
       return res.status(400).json({ errors: errors.array() });
     }
 
-
     const { email, username, password } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
-
 
     const result = await pool.query(
       "INSERT INTO users (email, username, password) VALUES ($1, $2, $3) RETURNING id, email, username",
       [email, username, hashedPassword]
     );
 
-
     res.json({ message: "User created successfully", user: result.rows[0] });
-  } catch (error) {
+  } catch (error: any) {
+    // Check for unique constraint violations
+    if (error.code === '23505') {
+      if (error.constraint === 'users_email_key') {
+        return res.status(400).json({ error: "Email already in use" });
+      }
+      if (error.constraint === 'users_username_key') {
+        return res.status(400).json({ error: "Username already taken" });
+      }
+    }
     next(error);
   }
 };
-
 
 export const login = async (req: Request, res: Response, next: NextFunction) => {
   try {
