@@ -269,6 +269,164 @@ export async function getChannel(req: Request, res: Response, next: NextFunction
   }
 }
 
+export async function updateChannel(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const uid = authUserIdOr401(req, res);
+  if (!uid) return;
+
+  const channelId = req.params.id;
+  const { display_name, description, event, films } = req.body;
+
+  const client = await pool.connect();
+  let begun = false;
+
+  try {
+    await client.query("BEGIN");
+    begun = true;
+
+    // Verify ownership
+    const ownership = await client.query(
+      `SELECT id FROM channels WHERE id = $1 AND owner_id = $2`,
+      [channelId, uid]
+    );
+
+    if (!ownership.rowCount) {
+      await client.query("ROLLBACK");
+      begun = false;
+      res.status(403).json({ error: "Not authorized to edit this channel" });
+      return;
+    }
+
+    // Update channel
+    const updated = await client.query(
+      `UPDATE channels 
+       SET display_name = $1, description = $2
+       WHERE id = $3
+       RETURNING *`,
+      [display_name, description, channelId]
+    );
+
+    // Handle event creation if provided (same logic as createChannel)
+    let sessionRow = null;
+    let filmRows: Array<{ id: number; title: string }> = [];
+
+    if (event && films && films.length > 0) {
+      const sesResult = await client.query(
+        `INSERT INTO sessions (channel_id, title, starts_at, ends_at, status, created_at)
+     VALUES ($1, $2, $3, $4, 'scheduled', now())
+     RETURNING id, channel_id, title, starts_at, ends_at, status`,
+        [channelId, event.title, event.starts_at, event.ends_at ?? null]
+      );
+      sessionRow = sesResult.rows[0];
+
+      for (let i = 0; i < films.length; i++) {
+        const f = films[i];
+        if (!f?.title || !f.title.trim()) continue;
+
+        const runtimeSeconds = parseDurationToSeconds(f.duration);
+
+        const found = await client.query(
+          `SELECT id, title FROM films WHERE lower(title) = lower($1) LIMIT 1`,
+          [f.title.trim()]
+        );
+
+        let filmId: number;
+        if (found.rowCount) {
+          filmId = found.rows[0].id;
+        } else {
+          const ins = await client.query(
+            `INSERT INTO films (title, creator_user_id, runtime_seconds, created_at)
+         VALUES ($1, $2, $3, now())
+         RETURNING id, title`,
+            [f.title.trim(), uid, runtimeSeconds]
+          );
+          filmId = ins.rows[0].id;
+        }
+
+        filmRows.push({ id: filmId, title: f.title.trim() });
+
+        await client.query(
+          `INSERT INTO session_entries (session_id, film_id, order_index)
+       VALUES ($1, $2, $3)`,
+          [sessionRow.id, filmId, i]
+        );
+      }
+    }
+
+    await client.query("COMMIT");
+    begun = false;
+
+    res.json({
+      ...updated.rows[0],
+      session: sessionRow,
+    });
+  } catch (err) {
+    try { if (begun) await client.query("ROLLBACK"); } catch { }
+    next(err);
+  } finally {
+    client.release();
+  }
+}
+
+// Add this to channelController.ts
+
+export async function deleteChannel(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const uid = authUserIdOr401(req, res);
+  if (!uid) return;
+
+  const channelId = req.params.id;
+
+  const client = await pool.connect();
+  let begun = false;
+
+  try {
+    await client.query("BEGIN");
+    begun = true;
+
+    // Verify ownership
+    const ownership = await client.query(
+      `SELECT id FROM channels WHERE id = $1 AND owner_id = $2`,
+      [channelId, uid]
+    );
+
+    if (!ownership.rowCount) {
+      await client.query("ROLLBACK");
+      begun = false;
+      res.status(403).json({ error: "Not authorized to delete this channel" });
+      return;
+    }
+
+    // Delete associated sessions and entries first (if any)
+    await client.query(
+      `DELETE FROM session_entries 
+       WHERE session_id IN (
+         SELECT id FROM sessions WHERE channel_id = $1
+       )`,
+      [channelId]
+    );
+
+    await client.query(
+      `DELETE FROM sessions WHERE channel_id = $1`,
+      [channelId]
+    );
+
+    // Delete the channel
+    await client.query(
+      `DELETE FROM channels WHERE id = $1`,
+      [channelId]
+    );
+
+    await client.query("COMMIT");
+    begun = false;
+
+    res.json({ success: true, message: "Channel deleted successfully" });
+  } catch (err) {
+    try { if (begun) await client.query("ROLLBACK"); } catch { }
+    next(err);
+  } finally {
+    client.release();
+  }
+}
+
 // GET /api/channels/:slug/ingest
 export async function getIngest(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
