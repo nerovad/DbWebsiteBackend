@@ -105,31 +105,6 @@ export async function updateAvatar(req: AuthRequest, res: Response): Promise<voi
   }
 }
 
-export async function getMyChannels(req: AuthRequest, res: Response): Promise<void> {
-  try {
-    const userId = req.userId;
-
-    const result = await pool.query(
-      "SELECT * FROM channels WHERE owner_id = $1 ORDER BY created_at DESC", // Changed to owner_id
-      [userId]
-    );
-
-    const channels = result.rows.map(ch => ({
-      id: ch.id.toString(),
-      name: ch.name,
-      slug: ch.slug,
-      description: ch.description,
-      isLive: ch.is_live,
-      thumbnail: ch.thumbnail
-    }));
-
-    res.json(channels);
-  } catch (error) {
-    console.error('Get channels error:', error);
-    res.status(500).json({ error: "Server error" });
-  }
-}
-
 export async function getMyFilms(req: AuthRequest, res: Response): Promise<void> {
   try {
     const userId = req.userId;

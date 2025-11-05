@@ -8,7 +8,7 @@ import {
   deleteChannel,
 } from "../controllers/channelController";
 import { listFilmsForChannel } from "../controllers/filmController";
-import { getMyChannels } from "../controllers/profileController";
+import { getMyChannels } from "../controllers/channelController";
 import { authenticateToken, AuthRequest } from "../middleware/authMiddleware";
 
 const router = express.Router();

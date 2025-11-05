@@ -4,7 +4,6 @@ import {
   getProfile,
   updateBio,
   updateAvatar,  // Add it here
-  getMyChannels,
   getMyFilms,
   getMyAwards,
   getMyCompanies
