@@ -73,7 +73,7 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       channel_number?: number;
       type?: string;
       event?: {
-        kind?: string;
+        kind?: string; // "film_festival" | "battle_royal" | "tournament"
         title: string;
         starts_at: string;
         ends_at?: string | null;
@@ -157,11 +157,12 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
     let filmRows: Array<{ id: number; title: string }> = [];
 
     if (hasEventPayload && hasFilms) {
+      // ✅ UPDATED: Add event_type to the session insert
       const sesResult = await client.query(
-        `insert into sessions (channel_id, title, starts_at, ends_at, status, created_at)
-         values ($1, $2, $3, $4, 'scheduled', now())
-         returning id, channel_id, title, starts_at, ends_at, status`,
-        [channel.id, event!.title, event!.starts_at, event!.ends_at ?? null]
+        `insert into sessions (channel_id, title, starts_at, ends_at, status, event_type, created_at)
+         values ($1, $2, $3, $4, 'scheduled', $5, now())
+         returning id, channel_id, title, starts_at, ends_at, status, event_type`,
+        [channel.id, event!.title, event!.starts_at, event!.ends_at ?? null, event!.kind ?? 'film_festival']
       );
       sessionRow = sesResult.rows[0];
 
@@ -237,22 +238,21 @@ export async function getChannel(req: Request, res: Response, next: NextFunction
   try {
     const slug = String(req.params.slug);
     const { rows } = await pool.query(
-      `select id, slug, name, stream_url, stream_key, ingest_app, playback_path, created_at
+      `select id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, created_at
          from channels
         where slug = $1
         limit 1`,
       [slug]
     );
-
     if (!rows.length) {
       res.status(404).json({ error: "Channel not found" });
       return;
     }
-
     const channel = rows[0];
 
+    // ✅ UPDATED: Add event_type to the session query
     const session = await pool.query(
-      `select id, title, starts_at, ends_at, status
+      `select id, title, starts_at, ends_at, status, event_type
          from sessions
         where channel_id = $1
         order by starts_at desc
@@ -260,9 +260,12 @@ export async function getChannel(req: Request, res: Response, next: NextFunction
       [channel.id]
     );
 
+    const latestSession = session.rows[0] ?? null;
+
     res.json({
       ...channel,
-      latestSession: session.rows[0] ?? null,
+      latestSession: latestSession,
+      event_type: latestSession?.event_type ?? null, // ✅ Add event_type at top level for easy frontend access
     });
   } catch (err) {
     next(err);
