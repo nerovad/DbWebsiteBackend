@@ -223,7 +223,7 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
 export async function listChannels(_req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { rows } = await pool.query(
-      `select id, slug, name, stream_url, stream_key, ingest_app, playback_path, created_at
+      `select id, slug, name, stream_url, stream_key, ingest_app, playback_path, channel_number, created_at
          from channels
         order by created_at desc`
     );
