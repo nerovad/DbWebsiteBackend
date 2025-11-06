@@ -28,7 +28,6 @@ router.get("/", (req: Request, res: Response, next: NextFunction) => {
   listChannels(req, res, next);
 });
 
-
 // PATCH /api/channels/:id (update channel)
 router.patch("/:id", authenticateToken, (req: Request, res: Response, next: NextFunction) => {
   updateChannel(req, res, next);
@@ -41,6 +40,10 @@ router.delete("/:id", authenticateToken, (req: Request, res: Response, next: Nex
 
 // GET /api/channels/:channelId/films (numeric IDs only)
 router.get("/:channelId(\\d+)/films", (req: Request, res: Response, next: NextFunction) => {
+  listFilmsForChannel(req, res, next);
+});
+
+router.get("/:slug/films", (req: Request, res: Response, next: NextFunction) => {
   listFilmsForChannel(req, res, next);
 });
 

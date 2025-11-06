@@ -157,9 +157,17 @@ export async function getMyFilms(req: Request, res: Response, next: NextFunction
 export async function listFilmsForChannel(req: Request, res: Response, next: NextFunction): Promise<void> {
   const client = await pool.connect();
   try {
-    const channelKey = String(req.params.channelId);
+    const channelKey = String(req.params.channelId || req.params.slug);
+    console.log("🔍 Looking for channel:", channelKey);
+
     const cid = await findChannelId(channelKey);
-    if (!cid) { res.json([]); return; }
+    if (!cid) {
+      console.log("❌ Channel not found for key:", channelKey); // Add this too
+      res.json([]);
+      return;
+    }
+
+    console.log("✅ Found channel ID:", cid);
 
     const nowIso = new Date().toISOString();
 
