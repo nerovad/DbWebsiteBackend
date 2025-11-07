@@ -63,7 +63,7 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       channel_number,
       // OPTIONAL festival payload
       type,   // "channel" | "festival" (unused for channel insert; accepted for completeness)
-      event,  // { kind, title, starts_at, ends_at, voting_mode, require_login }
+      event,  // { kind, title, starts_at, ends_at, voting_mode, require_login, tournament_bracket }
       films,  // [{ title, creator?, duration?, thumbnail? }]
     } = req.body as {
       name: string;
@@ -79,8 +79,15 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
         ends_at?: string | null;
         voting_mode?: "ratings" | "battle";
         require_login?: boolean;
+        tournament_bracket?: any; // ✅ ADD THIS - tournament bracket structure
       };
-      films?: Array<{ title: string; creator?: string; duration?: string; thumbnail?: string }>;
+      films?: Array<{
+        title: string;
+        creator?: string;
+        duration?: string;
+        thumbnail?: string;
+        id?: string; // ✅ ADD THIS - film ID for tournament seeding
+      }>;
     };
 
     if (!name && !slug) {
@@ -166,6 +173,7 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       );
       sessionRow = sesResult.rows[0];
 
+      // ✅ Process films and create session entries
       filmRows = [];
       for (let i = 0; i < films!.length; i++) {
         const f = films![i];
@@ -199,6 +207,64 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
           [sessionRow.id, filmId, i]
         );
       }
+
+      // ✅ TOURNAMENT BRACKET HANDLING - Add after session and films are created
+      if (event?.kind === "tournament" && event?.tournament_bracket) {
+        console.log("Creating tournament bracket for session:", sessionRow.id);
+
+        // Store bracket structure in session
+        await client.query(
+          `UPDATE sessions 
+           SET tournament_bracket = $1 
+           WHERE id = $2`,
+          [JSON.stringify(event.tournament_bracket), sessionRow.id]
+        );
+
+        // Create initial matchup records for Round 1 only
+        const bracket = event.tournament_bracket;
+
+        if (bracket.rounds && Array.isArray(bracket.rounds)) {
+          const firstRound = bracket.rounds.find((r: any) => r.roundNumber === 1);
+
+          if (firstRound && firstRound.matchups) {
+            for (const matchup of firstRound.matchups) {
+              // Get actual film database IDs by matching titles
+              let film1DbId: number | null = null;
+              let film2DbId: number | null = null;
+
+              if (matchup.film1?.filmId) {
+                const film1Match = filmRows.find(fr =>
+                  matchup.film1.title.toLowerCase() === fr.title.toLowerCase()
+                );
+                film1DbId = film1Match?.id ?? null;
+              }
+
+              if (matchup.film2?.filmId) {
+                const film2Match = filmRows.find(fr =>
+                  matchup.film2.title.toLowerCase() === fr.title.toLowerCase()
+                );
+                film2DbId = film2Match?.id ?? null;
+              }
+
+              // Store film IDs as strings (matching your schema)
+              await client.query(
+                `INSERT INTO tournament_matchups 
+                 (session_id, matchup_id, round_number, position, film1_id, film2_id)
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [
+                  sessionRow.id,
+                  matchup.id,
+                  firstRound.roundNumber,
+                  matchup.position,
+                  film1DbId ? film1DbId.toString() : null,
+                  film2DbId ? film2DbId.toString() : null,
+                ]
+              );
+            }
+            console.log(`Created ${firstRound.matchups.length} tournament matchups`);
+          }
+        }
+      }
     }
 
     await client.query("COMMIT");
@@ -210,7 +276,7 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       films: filmRows,
     });
   } catch (err) {
-    try { if (begun) await pool.query("ROLLBACK"); } catch { }
+    try { if (begun) await client.query("ROLLBACK"); } catch { }
     next(err);
   } finally {
     client.release();
