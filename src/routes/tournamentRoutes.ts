@@ -1,25 +1,53 @@
 import { Router } from "express";
+
+// Import from existing tournament controller
 import {
   getTournament,
   voteOnMatchup,
   advanceWinner,
   advanceAllInRound
 } from "../controllers/tournamentController";
-// import { authenticateAdmin } from "../middleware/auth"; // If you have admin middleware
+
+// Import from new tournament voting controller
+import {
+  getTournamentStatus,
+  startVoting,
+  endVoting
+} from "../controllers/tournamentVotingController";
 
 const router = Router();
 
-// Get tournament bracket for a channel
+// ============================================
+// PUBLIC ROUTES - Tournament Viewing & Voting
+// ============================================
+
+// Get tournament bracket for a channel (public)
 router.get("/channels/:channelId/tournament", getTournament);
 
-// Vote on a matchup (public or authenticated)
+// Vote on a matchup (auth checked in controller)
 router.post("/tournaments/matchups/:matchupId/vote", voteOnMatchup);
 
-// Advance winner to next round (admin only - comment out auth for now)
-// router.post("/tournaments/matchups/:matchupId/advance", authenticateAdmin, advanceWinner);
+// ============================================
+// MANAGEMENT ROUTES - Tournament Console (Owner Only)
+// ============================================
+
+// Get tournament status for console dashboard (auth checked in controller)
+router.get("/tournaments/:sessionId/status", getTournamentStatus);
+
+// Start voting window for a round (auth checked in controller)
+router.post("/tournaments/:sessionId/voting/start", startVoting);
+
+// End voting window and advance winners (auth checked in controller)
+router.post("/tournaments/:sessionId/voting/end", endVoting);
+
+// ============================================
+// ADMIN ROUTES - Manual Advancement (Testing/Admin)
+// ============================================
+
+// Manually advance winner to next round
 router.post("/tournaments/matchups/:matchupId/advance", advanceWinner);
 
-// Advance entire round (admin only)
+// Manually advance entire round
 router.post("/tournaments/rounds/:sessionId/:roundNumber/advance-all", advanceAllInRound);
 
 export default router;

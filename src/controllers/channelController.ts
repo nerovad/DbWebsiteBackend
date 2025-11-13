@@ -549,20 +549,28 @@ export async function rotateKey(req: Request, res: Response, next: NextFunction)
 }
 
 /* ===== NEW: GET /api/channels/mine ===== */
+
 export async function getMyChannels(req: Request, res: Response): Promise<void> {
   const uid = authUserIdOr401(req, res);
   if (!uid) return;
 
   const r = await pool.query(
-    `select
-      id, slug, name, display_name, channel_number,
-      stream_url,
+    `SELECT
+      c.id, 
+      c.slug, 
+      c.name, 
+      c.display_name, 
+      c.channel_number,
+      c.stream_url,
       null::text as description,
       false as "isLive",
-      null::text as thumbnail
-    from channels
-    where owner_id = $1
-    order by created_at desc`,
+      null::text as thumbnail,
+      s.id as session_id,
+      s.event_type
+    FROM channels c
+    LEFT JOIN sessions s ON s.channel_id = c.id AND s.is_active = true
+    WHERE c.owner_id = $1
+    ORDER BY c.created_at DESC`,
     [uid]
   );
 

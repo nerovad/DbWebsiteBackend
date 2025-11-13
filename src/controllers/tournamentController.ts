@@ -5,6 +5,7 @@ import pool from "../../db/pool";
 /**
  * GET /api/channels/:channelId/tournament
  * Fetches tournament bracket data with current vote counts
+ * UPDATED: Now includes voting_window information
  */
 export async function getTournament(req: Request, res: Response): Promise<void> {
   try {
@@ -20,7 +21,8 @@ export async function getTournament(req: Request, res: Response): Promise<void> 
         s.tournament_bracket, 
         s.starts_at, 
         s.ends_at,
-        s.event_type
+        s.event_type,
+        s.voting_window
        FROM channels c
        LEFT JOIN sessions s ON s.channel_id = c.id AND s.is_active = true
        WHERE c.id::text = $1 OR c.slug = $1`,
@@ -111,6 +113,9 @@ export async function getTournament(req: Request, res: Response): Promise<void> 
       }),
     }));
 
+    // Include voting window in response
+    const votingWindow = channel.voting_window || { isActive: false, currentRound: null };
+
     res.json({
       id: channel.session_id,
       channelName: channel.channel_name,
@@ -119,6 +124,7 @@ export async function getTournament(req: Request, res: Response): Promise<void> 
       rounds: updatedRounds,
       startsAt: channel.starts_at,
       endsAt: channel.ends_at,
+      votingWindow, // NEW: Include voting window status
     });
   } catch (error) {
     console.error("Error fetching tournament:", error);
@@ -129,6 +135,7 @@ export async function getTournament(req: Request, res: Response): Promise<void> 
 /**
  * POST /api/tournaments/matchups/:matchupId/vote
  * Records a vote for a film in a matchup
+ * UPDATED: Now checks voting_window before allowing votes
  */
 export async function voteOnMatchup(req: Request, res: Response): Promise<void> {
   try {
@@ -141,9 +148,9 @@ export async function voteOnMatchup(req: Request, res: Response): Promise<void> 
       return;
     }
 
-    // Get matchup details
+    // Get matchup details including voting_window from session
     const matchupResult = await pool.query(
-      `SELECT tm.*, s.require_login 
+      `SELECT tm.*, s.require_login, s.voting_window
        FROM tournament_matchups tm
        JOIN sessions s ON s.id = tm.session_id
        WHERE tm.id = $1`,
@@ -156,6 +163,22 @@ export async function voteOnMatchup(req: Request, res: Response): Promise<void> 
     }
 
     const matchup = matchupResult.rows[0];
+
+    // NEW: Check if voting window is active
+    const votingWindow = matchup.voting_window || { isActive: false, currentRound: null };
+
+    if (!votingWindow.isActive) {
+      res.status(400).json({ error: "Voting is not currently active" });
+      return;
+    }
+
+    // NEW: Check if voting is for the correct round
+    if (votingWindow.currentRound !== matchup.round_number) {
+      res.status(400).json({
+        error: `Voting is active for Round ${votingWindow.currentRound}, not Round ${matchup.round_number}`
+      });
+      return;
+    }
 
     // Verify film is in this matchup
     if (filmId !== matchup.film1_id && filmId !== matchup.film2_id) {
