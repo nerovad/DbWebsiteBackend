@@ -266,6 +266,12 @@ export const endVoting = async (req: AuthRequest, res: Response): Promise<void> 
 
     const currentRound = votingWindow.currentRound!;
 
+    // Get tournament bracket to check total rounds
+    const bracket = session.tournament_bracket;
+    const totalRounds = bracket?.rounds?.length || 0;
+
+    console.log(`🎯 Ending voting for Round ${currentRound} of ${totalRounds}`);
+
     // Get all matchups in current round
     const matchupsQuery = await pool.query(
       `SELECT * FROM tournament_matchups
@@ -287,6 +293,7 @@ export const endVoting = async (req: AuthRequest, res: Response): Promise<void> 
       } else if (matchup.film1_votes === matchup.film2_votes) {
         // In case of tie, randomly pick (or you could use seed)
         winnerId = Math.random() < 0.5 ? matchup.film1_id : matchup.film2_id;
+        console.log(`⚖️  Tie in matchup ${matchup.matchup_id}, randomly selected winner: ${winnerId}`);
       }
 
       if (winnerId) {
@@ -298,11 +305,25 @@ export const endVoting = async (req: AuthRequest, res: Response): Promise<void> 
           [winnerId, matchup.id]
         );
 
+        console.log(`✅ Winner for matchup ${matchup.matchup_id}: ${winnerId}`);
         winnersAdvanced++;
 
-        // Advance winner to next round if not finals
+        // Check if this is the final round
+        if (currentRound === totalRounds) {
+          console.log(`🏆 This is the FINAL ROUND! Champion: ${winnerId}`);
+          continue; // Don't advance to next round - tournament is complete
+        }
+
+        // Advance winner to next round
         const nextRound = currentRound + 1;
         const nextPosition = Math.floor(matchup.position / 2);
+        const nextMatchupId = `r${nextRound}-m${nextPosition + 1}`;
+
+        // Determine if winner goes to film1 or film2 slot
+        const isFilm1Slot = matchup.position % 2 === 0;
+        const filmSlot = isFilm1Slot ? 'film1_id' : 'film2_id';
+
+        console.log(`➡️  Advancing ${winnerId} to Round ${nextRound}, Position ${nextPosition} (${filmSlot})`);
 
         // Check if next round matchup exists
         const nextMatchupQuery = await pool.query(
@@ -312,16 +333,25 @@ export const endVoting = async (req: AuthRequest, res: Response): Promise<void> 
         );
 
         if (nextMatchupQuery.rows.length > 0) {
+          // Update existing matchup
           const nextMatchup = nextMatchupQuery.rows[0];
-
-          // Determine if winner goes to film1 or film2 slot
-          const filmSlot = matchup.position % 2 === 0 ? 'film1_id' : 'film2_id';
+          console.log(`📝 Updating existing matchup ${nextMatchup.id}`);
 
           await pool.query(
             `UPDATE tournament_matchups
-             SET ${filmSlot} = $1
+             SET ${filmSlot} = $1, updated_at = NOW()
              WHERE id = $2`,
             [winnerId, nextMatchup.id]
+          );
+        } else {
+          // ✅ CREATE next round matchup if it doesn't exist
+          console.log(`🆕 Creating new matchup for Round ${nextRound}, Position ${nextPosition}`);
+
+          await pool.query(
+            `INSERT INTO tournament_matchups 
+             (session_id, matchup_id, round_number, position, ${filmSlot}, film1_votes, film2_votes)
+             VALUES ($1, $2, $3, $4, $5, 0, 0)`,
+            [sessionId, nextMatchupId, nextRound, nextPosition, winnerId]
           );
         }
       }
@@ -336,10 +366,13 @@ export const endVoting = async (req: AuthRequest, res: Response): Promise<void> 
       [JSON.stringify(closedVotingWindow), sessionId]
     );
 
+    console.log(`✅ Voting ended. ${winnersAdvanced} winners advanced.`);
+
     res.json({
       message: 'Voting ended and winners advanced',
       winnersAdvanced,
-      round: currentRound
+      round: currentRound,
+      isFinalRound: currentRound === totalRounds
     });
   } catch (error) {
     console.error('Error ending voting:', error);

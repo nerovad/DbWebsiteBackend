@@ -63,6 +63,27 @@ export async function getTournament(req: Request, res: Response): Promise<void> 
       [channel.session_id]
     );
 
+    // ✅ Get all film details for films in this tournament
+    const filmIds = new Set<string>();
+    matchupsResult.rows.forEach(m => {
+      if (m.film1_id) filmIds.add(m.film1_id);
+      if (m.film2_id) filmIds.add(m.film2_id);
+    });
+
+    const filmsResult = await pool.query(
+      `SELECT id, title, creator_user_id, runtime_seconds 
+       FROM films 
+       WHERE id = ANY($1::int[])`,
+      [Array.from(filmIds).map(id => parseInt(id))]
+    );
+
+    const filmsMap = new Map();
+    filmsResult.rows.forEach(f => {
+      filmsMap.set(String(f.id), f);
+    });
+
+    console.log('📚 Loaded film details:', Array.from(filmsMap.keys()));
+
     // Determine tournament status
     const now = new Date();
     const startsAt = new Date(channel.starts_at);
@@ -100,22 +121,43 @@ export async function getTournament(req: Request, res: Response): Promise<void> 
           (m) => m.matchup_id === matchup.id
         );
 
-        // ✅ CRITICAL FIX: Replace temporary filmId with actual database IDs
-        const film1 = matchup.film1 ? {
-          ...matchup.film1,
-          filmId: dbMatchup?.film1_id || matchup.film1.filmId
-        } : null;
+        // ✅ CRITICAL FIX: Build film objects from database data
+        let film1 = null;
+        let film2 = null;
 
-        const film2 = matchup.film2 ? {
-          ...matchup.film2,
-          filmId: dbMatchup?.film2_id || matchup.film2.filmId
-        } : null;
+        if (dbMatchup?.film1_id) {
+          const film1Data = filmsMap.get(dbMatchup.film1_id);
+          if (film1Data) {
+            film1 = {
+              filmId: dbMatchup.film1_id,
+              seed: matchup.film1?.seed || 0,
+              title: film1Data.title,
+              creator: matchup.film1?.creator,
+              thumbnail: matchup.film1?.thumbnail
+            };
+          }
+        }
+
+        if (dbMatchup?.film2_id) {
+          const film2Data = filmsMap.get(dbMatchup.film2_id);
+          if (film2Data) {
+            film2 = {
+              filmId: dbMatchup.film2_id,
+              seed: matchup.film2?.seed || 0,
+              title: film2Data.title,
+              creator: matchup.film2?.creator,
+              thumbnail: matchup.film2?.thumbnail
+            };
+          }
+        }
 
         // Debug logging
-        if (dbMatchup) {
-          console.log(`Matchup ${matchup.id}: Replaced temp IDs with DB IDs`, {
-            film1: { old: matchup.film1?.filmId, new: film1?.filmId },
-            film2: { old: matchup.film2?.filmId, new: film2?.filmId }
+        if (dbMatchup && round.roundNumber > 1) {
+          console.log(`Round ${round.roundNumber} Matchup ${matchup.id}:`, {
+            film1_id: dbMatchup.film1_id,
+            film1_title: film1?.title,
+            film2_id: dbMatchup.film2_id,
+            film2_title: film2?.title
           });
         }
 
