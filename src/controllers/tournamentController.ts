@@ -100,12 +100,31 @@ export async function getTournament(req: Request, res: Response): Promise<void> 
           (m) => m.matchup_id === matchup.id
         );
 
+        // ✅ CRITICAL FIX: Replace temporary filmId with actual database IDs
+        const film1 = matchup.film1 ? {
+          ...matchup.film1,
+          filmId: dbMatchup?.film1_id || matchup.film1.filmId
+        } : null;
+
+        const film2 = matchup.film2 ? {
+          ...matchup.film2,
+          filmId: dbMatchup?.film2_id || matchup.film2.filmId
+        } : null;
+
+        // Debug logging
+        if (dbMatchup) {
+          console.log(`Matchup ${matchup.id}: Replaced temp IDs with DB IDs`, {
+            film1: { old: matchup.film1?.filmId, new: film1?.filmId },
+            film2: { old: matchup.film2?.filmId, new: film2?.filmId }
+          });
+        }
+
         return {
           id: matchup.id,
           position: matchup.position,
           roundNumber: round.roundNumber,
-          film1: matchup.film1,
-          film2: matchup.film2,
+          film1,
+          film2,
           votes1: dbMatchup?.film1_votes || 0,
           votes2: dbMatchup?.film2_votes || 0,
           winner: dbMatchup?.winner_id || undefined,
@@ -137,14 +156,15 @@ export async function getTournament(req: Request, res: Response): Promise<void> 
  * POST /api/tournaments/matchups/:matchupId/vote
  * Records a vote for a film in a matchup
  * UPDATED: Now checks voting_window before allowing votes
+ * FIXED: Property name film_id and string comparison
  */
 export async function voteOnMatchup(req: AuthRequest, res: Response): Promise<void> {
   try {
     const { matchupId } = req.params;
-    const { filmId } = req.body;
+    const { film_id } = req.body; // ✅ FIXED: Changed from filmId to film_id
     const userId = req.userId; // ✅ Use req.userId from auth middleware
 
-    if (!filmId) {
+    if (!film_id) {
       res.status(400).json({ error: "Film ID is required" });
       return;
     }
@@ -181,8 +201,18 @@ export async function voteOnMatchup(req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
+    // ✅ CRITICAL FIX: Convert to string for comparison
+    // film1_id and film2_id are stored as strings in the database
+    const filmIdStr = String(film_id);
+
     // Verify film is in this matchup
-    if (filmId !== matchup.film1_id && filmId !== matchup.film2_id) {
+    if (filmIdStr !== matchup.film1_id && filmIdStr !== matchup.film2_id) {
+      console.error('Film validation failed:', {
+        received: film_id,
+        filmIdStr,
+        film1_id: matchup.film1_id,
+        film2_id: matchup.film2_id
+      });
       res.status(400).json({ error: "Invalid film for this matchup" });
       return;
     }
@@ -218,14 +248,16 @@ export async function voteOnMatchup(req: AuthRequest, res: Response): Promise<vo
       await client.query('BEGIN');
 
       if (userId) {
+        // ✅ Store as string in database
         await client.query(
           `INSERT INTO tournament_votes (matchup_id, user_id, film_id)
            VALUES ($1, $2, $3)`,
-          [matchupId, userId, filmId]
+          [matchupId, userId, filmIdStr]
         );
       }
 
-      const voteColumn = filmId === matchup.film1_id ? 'film1_votes' : 'film2_votes';
+      // ✅ Use string for comparison
+      const voteColumn = filmIdStr === matchup.film1_id ? 'film1_votes' : 'film2_votes';
       await client.query(
         `UPDATE tournament_matchups 
          SET ${voteColumn} = ${voteColumn} + 1,
