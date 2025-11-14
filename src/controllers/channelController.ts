@@ -46,6 +46,8 @@ function parseDurationToSeconds(s?: string): number | null {
  * Create or update a channel, and (optionally) create a session + lineup.
  * - Associates the channel with the logged-in user (owner_id).
  * - Updates are allowed only if the current user owns the channel.
+ * - Auto-determines voting_mode based on event.kind
+ * - Always requires login to vote (require_login = true)
  */
 export async function createChannel(req: Request, res: Response, next: NextFunction): Promise<void> {
   const uid = authUserIdOr401(req, res);
@@ -62,9 +64,9 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       display_name,
       channel_number,
       // OPTIONAL festival payload
-      type,   // "channel" | "festival" (unused for channel insert; accepted for completeness)
-      event,  // { kind, title, starts_at, ends_at, voting_mode, require_login, tournament_bracket }
-      films,  // [{ title, creator?, duration?, thumbnail? }]
+      type, // "channel" | "festival" (unused for channel insert; accepted for completeness)
+      event, // { kind, title, starts_at, ends_at, tournament_bracket }
+      films, // [{ title, creator?, duration?, thumbnail?, id? }]
     } = req.body as {
       name: string;
       slug?: string;
@@ -77,16 +79,14 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
         title: string;
         starts_at: string;
         ends_at?: string | null;
-        voting_mode?: "ratings" | "battle";
-        require_login?: boolean;
-        tournament_bracket?: any; // ✅ ADD THIS - tournament bracket structure
+        tournament_bracket?: any; // tournament bracket structure
       };
       films?: Array<{
         title: string;
         creator?: string;
         duration?: string;
         thumbnail?: string;
-        id?: string; // ✅ ADD THIS - film ID for tournament seeding
+        id?: string; // film ID for tournament seeding
       }>;
     };
 
@@ -103,9 +103,7 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
     // Check if slug already exists
     const existing = await client.query(
       `select id, owner_id, name, stream_url, stream_key, ingest_app, playback_path, created_at
-         from channels
-        where slug = $1
-        limit 1`,
+       from channels where slug = $1 limit 1`,
       [slug]
     );
 
@@ -113,7 +111,6 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
 
     if (existing.rowCount) {
       const row = existing.rows[0];
-
       // Only owner can update this channel
       if (row.owner_id !== uid) {
         await client.query("ROLLBACK");
@@ -125,16 +122,12 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       // Update name/stream_url only; preserve keys/paths
       const upd = await client.query(
         `update channels
-            set name = $2,
-                stream_url = $3,
-                display_name = $4,
-                channel_number = $5
-          where id = $1
-        returning id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, created_at`,
+         set name = $2, stream_url = $3, display_name = $4, channel_number = $5
+         where id = $1
+         returning id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, created_at`,
         [row.id, name ?? row.name, stream_url ?? row.stream_url, display_name ?? row.display_name, channel_number ?? row.channel_number]
       );
       channel = upd.rows[0];
-
     } else {
       // Create a brand-new channel for this owner
       const streamKey = generateStreamKey();
@@ -142,9 +135,10 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       const playbackPath = `/hls/${streamKey}/index.m3u8`;
 
       const chResult = await client.query(
-        `insert into channels (owner_id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, created_at)
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9, now())
-        returning id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, created_at`,
+        `insert into channels
+           (owner_id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, created_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9, now())
+         returning id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, created_at`,
         [uid, slug, name ?? slug, stream_url ?? null, streamKey, ingestApp, playbackPath, display_name ?? null, channel_number ?? null]
       );
       channel = chResult.rows[0];
@@ -164,12 +158,26 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
     let filmRows: Array<{ id: number; title: string }> = [];
 
     if (hasEventPayload && hasFilms) {
-      // ✅ UPDATED: Add event_type to the session insert
+      // ✅ Auto-determine voting_mode based on event type
+      const eventKind = event!.kind ?? 'film_festival';
+      let votingMode: 'ratings' | 'battle';
+
+      if (eventKind === 'film_festival') {
+        votingMode = 'ratings';
+      } else if (eventKind === 'battle_royal' || eventKind === 'tournament') {
+        votingMode = 'battle';
+      } else {
+        votingMode = 'ratings'; // default fallback
+      }
+
+      // ✅ Always require login to vote
+      const requireLogin = true;
+
       const sesResult = await client.query(
-        `insert into sessions (channel_id, title, starts_at, ends_at, status, event_type, created_at)
-         values ($1, $2, $3, $4, 'scheduled', $5, now())
-         returning id, channel_id, title, starts_at, ends_at, status, event_type`,
-        [channel.id, event!.title, event!.starts_at, event!.ends_at ?? null, event!.kind ?? 'film_festival']
+        `insert into sessions (channel_id, title, starts_at, ends_at, status, event_type, voting_mode, require_login, created_at)
+         values ($1, $2, $3, $4, 'scheduled', $5, $6, $7, now())
+         returning id, channel_id, title, starts_at, ends_at, status, event_type, voting_mode, require_login`,
+        [channel.id, event!.title, event!.starts_at, event!.ends_at ?? null, eventKind, votingMode, requireLogin]
       );
       sessionRow = sesResult.rows[0];
 
@@ -214,18 +222,14 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
 
         // Store bracket structure in session
         await client.query(
-          `UPDATE sessions 
-           SET tournament_bracket = $1 
-           WHERE id = $2`,
+          `UPDATE sessions SET tournament_bracket = $1 WHERE id = $2`,
           [JSON.stringify(event.tournament_bracket), sessionRow.id]
         );
 
         // Create initial matchup records for Round 1 only
         const bracket = event.tournament_bracket;
-
         if (bracket.rounds && Array.isArray(bracket.rounds)) {
           const firstRound = bracket.rounds.find((r: any) => r.roundNumber === 1);
-
           if (firstRound && firstRound.matchups) {
             for (const matchup of firstRound.matchups) {
               // Get actual film database IDs by matching titles
@@ -248,8 +252,7 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
 
               // Store film IDs as strings (matching your schema)
               await client.query(
-                `INSERT INTO tournament_matchups 
-                 (session_id, matchup_id, round_number, position, film1_id, film2_id)
+                `INSERT INTO tournament_matchups (session_id, matchup_id, round_number, position, film1_id, film2_id)
                  VALUES ($1, $2, $3, $4, $5, $6)`,
                 [
                   sessionRow.id,
@@ -276,7 +279,9 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       films: filmRows,
     });
   } catch (err) {
-    try { if (begun) await client.query("ROLLBACK"); } catch { }
+    try {
+      if (begun) await client.query("ROLLBACK");
+    } catch { }
     next(err);
   } finally {
     client.release();
@@ -285,13 +290,12 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
 
 /* ===== Existing endpoints (kept) ===== */
 
-// GET /api/channels  -> must return an ARRAY
+// GET /api/channels -> must return an ARRAY
 export async function listChannels(_req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { rows } = await pool.query(
       `select id, slug, name, stream_url, stream_key, ingest_app, playback_path, channel_number, created_at
-         from channels
-        order by created_at desc`
+       from channels order by created_at desc`
     );
     res.json(rows);
   } catch (err) {
@@ -305,24 +309,21 @@ export async function getChannel(req: Request, res: Response, next: NextFunction
     const slug = String(req.params.slug);
     const { rows } = await pool.query(
       `select id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, created_at
-         from channels
-        where slug = $1
-        limit 1`,
+       from channels where slug = $1 limit 1`,
       [slug]
     );
     if (!rows.length) {
       res.status(404).json({ error: "Channel not found" });
       return;
     }
+
     const channel = rows[0];
 
     // ✅ UPDATED: Add event_type to the session query
     const session = await pool.query(
       `select id, title, starts_at, ends_at, status, event_type
-         from sessions
-        where channel_id = $1
-        order by starts_at desc
-        limit 1`,
+       from sessions where channel_id = $1
+       order by starts_at desc limit 1`,
       [channel.id]
     );
 
@@ -367,10 +368,7 @@ export async function updateChannel(req: Request, res: Response, next: NextFunct
 
     // Update channel
     const updated = await client.query(
-      `UPDATE channels 
-       SET display_name = $1, description = $2
-       WHERE id = $3
-       RETURNING *`,
+      `UPDATE channels SET display_name = $1, description = $2 WHERE id = $3 RETURNING *`,
       [display_name, description, channelId]
     );
 
@@ -381,8 +379,8 @@ export async function updateChannel(req: Request, res: Response, next: NextFunct
     if (event && films && films.length > 0) {
       const sesResult = await client.query(
         `INSERT INTO sessions (channel_id, title, starts_at, ends_at, status, created_at)
-     VALUES ($1, $2, $3, $4, 'scheduled', now())
-     RETURNING id, channel_id, title, starts_at, ends_at, status`,
+         VALUES ($1, $2, $3, $4, 'scheduled', now())
+         RETURNING id, channel_id, title, starts_at, ends_at, status`,
         [channelId, event.title, event.starts_at, event.ends_at ?? null]
       );
       sessionRow = sesResult.rows[0];
@@ -404,8 +402,8 @@ export async function updateChannel(req: Request, res: Response, next: NextFunct
         } else {
           const ins = await client.query(
             `INSERT INTO films (title, creator_user_id, runtime_seconds, created_at)
-         VALUES ($1, $2, $3, now())
-         RETURNING id, title`,
+             VALUES ($1, $2, $3, now())
+             RETURNING id, title`,
             [f.title.trim(), uid, runtimeSeconds]
           );
           filmId = ins.rows[0].id;
@@ -415,7 +413,7 @@ export async function updateChannel(req: Request, res: Response, next: NextFunct
 
         await client.query(
           `INSERT INTO session_entries (session_id, film_id, order_index)
-       VALUES ($1, $2, $3)`,
+           VALUES ($1, $2, $3)`,
           [sessionRow.id, filmId, i]
         );
       }
@@ -429,7 +427,9 @@ export async function updateChannel(req: Request, res: Response, next: NextFunct
       session: sessionRow,
     });
   } catch (err) {
-    try { if (begun) await client.query("ROLLBACK"); } catch { }
+    try {
+      if (begun) await client.query("ROLLBACK");
+    } catch { }
     next(err);
   } finally {
     client.release();
@@ -437,7 +437,6 @@ export async function updateChannel(req: Request, res: Response, next: NextFunct
 }
 
 // Add this to channelController.ts
-
 export async function deleteChannel(req: Request, res: Response, next: NextFunction): Promise<void> {
   const uid = authUserIdOr401(req, res);
   if (!uid) return;
@@ -466,30 +465,25 @@ export async function deleteChannel(req: Request, res: Response, next: NextFunct
 
     // Delete associated sessions and entries first (if any)
     await client.query(
-      `DELETE FROM session_entries 
-       WHERE session_id IN (
+      `DELETE FROM session_entries WHERE session_id IN (
          SELECT id FROM sessions WHERE channel_id = $1
        )`,
       [channelId]
     );
 
-    await client.query(
-      `DELETE FROM sessions WHERE channel_id = $1`,
-      [channelId]
-    );
+    await client.query(`DELETE FROM sessions WHERE channel_id = $1`, [channelId]);
 
     // Delete the channel
-    await client.query(
-      `DELETE FROM channels WHERE id = $1`,
-      [channelId]
-    );
+    await client.query(`DELETE FROM channels WHERE id = $1`, [channelId]);
 
     await client.query("COMMIT");
     begun = false;
 
     res.json({ success: true, message: "Channel deleted successfully" });
   } catch (err) {
-    try { if (begun) await client.query("ROLLBACK"); } catch { }
+    try {
+      if (begun) await client.query("ROLLBACK");
+    } catch { }
     next(err);
   } finally {
     client.release();
@@ -501,13 +495,9 @@ export async function getIngest(req: Request, res: Response, next: NextFunction)
   try {
     const slug = String(req.params.slug);
     const { rows } = await pool.query(
-      `select slug, stream_key, ingest_app
-         from channels
-        where slug = $1
-        limit 1`,
+      `select slug, stream_key, ingest_app from channels where slug = $1 limit 1`,
       [slug]
     );
-
     if (!rows.length) {
       res.status(404).json({ error: "Channel not found" });
       return;
@@ -515,6 +505,7 @@ export async function getIngest(req: Request, res: Response, next: NextFunction)
 
     const { stream_key, ingest_app } = rows[0];
     const ingest_url = `rtmp://dainbramage.tv/${ingest_app}/${stream_key}`;
+
     res.json({ ingest_url, stream_key });
   } catch (err) {
     next(err);
@@ -530,10 +521,9 @@ export async function rotateKey(req: Request, res: Response, next: NextFunction)
 
     const { rows } = await pool.query(
       `update channels
-          set stream_key = $1,
-              playback_path = $2
-        where slug = $3
-      returning stream_key, playback_path`,
+       set stream_key = $1, playback_path = $2
+       where slug = $3
+       returning stream_key, playback_path`,
       [newKey, newPlayback, slug]
     );
 
@@ -549,28 +539,27 @@ export async function rotateKey(req: Request, res: Response, next: NextFunction)
 }
 
 /* ===== NEW: GET /api/channels/mine ===== */
-
 export async function getMyChannels(req: Request, res: Response): Promise<void> {
   const uid = authUserIdOr401(req, res);
   if (!uid) return;
 
   const r = await pool.query(
     `SELECT
-      c.id, 
-      c.slug, 
-      c.name, 
-      c.display_name, 
-      c.channel_number,
-      c.stream_url,
-      null::text as description,
-      false as "isLive",
-      null::text as thumbnail,
-      s.id as session_id,
-      s.event_type
-    FROM channels c
-    LEFT JOIN sessions s ON s.channel_id = c.id AND s.is_active = true
-    WHERE c.owner_id = $1
-    ORDER BY c.created_at DESC`,
+       c.id,
+       c.slug,
+       c.name,
+       c.display_name,
+       c.channel_number,
+       c.stream_url,
+       null::text as description,
+       false as "isLive",
+       null::text as thumbnail,
+       s.id as session_id,
+       s.event_type
+     FROM channels c
+     LEFT JOIN sessions s ON s.channel_id = c.id AND s.is_active = true
+     WHERE c.owner_id = $1
+     ORDER BY c.created_at DESC`,
     [uid]
   );
 

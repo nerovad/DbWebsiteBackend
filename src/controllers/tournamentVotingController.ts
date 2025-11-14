@@ -1,4 +1,5 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { AuthRequest } from '../middleware/authMiddleware';
 import pool from '../../db/pool';
 
 interface VotingWindow {
@@ -35,12 +36,18 @@ interface RoundMatchup {
 }
 
 // Get tournament status (for Tournament Console)
-export const getTournamentStatus = async (req: Request, res: Response): Promise<void> => {
+export const getTournamentStatus = async (req: AuthRequest, res: Response): Promise<void> => {
   const { sessionId } = req.params;
-  const userId = (req as any).user?.id;
+  const userId = req.userId; // ✅ Use req.userId from your auth middleware
 
   if (!userId) {
     res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+
+  const sessionIdNum = Number(sessionId);
+  if (Number.isNaN(sessionIdNum)) {
+    res.status(400).json({ error: 'Invalid session id' });
     return;
   }
 
@@ -49,8 +56,8 @@ export const getTournamentStatus = async (req: Request, res: Response): Promise<
     const sessionQuery = await pool.query(
       `SELECT s.*, c.owner_id 
        FROM sessions s 
-       JOIN channels c ON s.channel_id = c.id 
-       WHERE s.id = $1 AND s.event_type = 'Tournament'`,
+       JOIN channels c ON s.channel_id::text = c.id::text 
+       WHERE s.id::text = $1 AND LOWER(s.event_type) = 'tournament'`,
       [sessionId]
     );
 
@@ -73,13 +80,14 @@ export const getTournamentStatus = async (req: Request, res: Response): Promise<
         tm.*,
         f1.title as film1_title,
         f2.title as film2_title
-       FROM tournament_matchups tm
-       LEFT JOIN films f1 ON tm.film1_id = f1.id
-       LEFT JOIN films f2 ON tm.film2_id = f2.id
-       WHERE tm.session_id = $1
-       ORDER BY tm.round_number, tm.position`,
-      [sessionId]
+      FROM tournament_matchups tm
+      LEFT JOIN films f1 ON tm.film1_id::bigint = f1.id
+      LEFT JOIN films f2 ON tm.film2_id::bigint = f2.id
+      WHERE tm.session_id = $1
+      ORDER BY tm.round_number, tm.position`,
+      [sessionIdNum] // number, not string
     );
+
 
     const matchups = matchupsQuery.rows;
 
@@ -133,10 +141,10 @@ export const getTournamentStatus = async (req: Request, res: Response): Promise<
 };
 
 // Start voting for a round
-export const startVoting = async (req: Request, res: Response): Promise<void> => {
+export const startVoting = async (req: AuthRequest, res: Response): Promise<void> => {
   const { sessionId } = req.params;
   const { round } = req.body;
-  const userId = (req as any).user?.id;
+  const userId = req.userId; // ✅ Use req.userId
 
   if (!userId) {
     res.status(401).json({ error: 'Authentication required' });
@@ -153,8 +161,8 @@ export const startVoting = async (req: Request, res: Response): Promise<void> =>
     const sessionQuery = await pool.query(
       `SELECT s.*, c.owner_id 
        FROM sessions s 
-       JOIN channels c ON s.channel_id = c.id 
-       WHERE s.id = $1 AND s.event_type = 'Tournament'`,
+       JOIN channels c ON s.channel_id::text = c.id::text 
+       WHERE s.id::text = $1 AND LOWER(s.event_type) = 'tournament'`,
       [sessionId]
     );
 
@@ -183,7 +191,7 @@ export const startVoting = async (req: Request, res: Response): Promise<void> =>
     const roundMatchups = await pool.query(
       `SELECT COUNT(*) as total, COUNT(winner_id) as completed
        FROM tournament_matchups
-       WHERE session_id = $1 AND round_number = $2`,
+       WHERE session_id::text = $1 AND round_number = $2`,
       [sessionId, round]
     );
 
@@ -218,9 +226,9 @@ export const startVoting = async (req: Request, res: Response): Promise<void> =>
 };
 
 // End voting and advance winners
-export const endVoting = async (req: Request, res: Response): Promise<void> => {
+export const endVoting = async (req: AuthRequest, res: Response): Promise<void> => {
   const { sessionId } = req.params;
-  const userId = (req as any).user?.id;
+  const userId = req.userId; // ✅ Use req.userId
 
   if (!userId) {
     res.status(401).json({ error: 'Authentication required' });
@@ -232,8 +240,8 @@ export const endVoting = async (req: Request, res: Response): Promise<void> => {
     const sessionQuery = await pool.query(
       `SELECT s.*, c.owner_id 
        FROM sessions s 
-       JOIN channels c ON s.channel_id = c.id 
-       WHERE s.id = $1 AND s.event_type = 'Tournament'`,
+       JOIN channels c ON s.channel_id::text = c.id::text 
+       WHERE s.id::text = $1 AND LOWER(s.event_type) = 'tournament'`,
       [sessionId]
     );
 
@@ -261,7 +269,7 @@ export const endVoting = async (req: Request, res: Response): Promise<void> => {
     // Get all matchups in current round
     const matchupsQuery = await pool.query(
       `SELECT * FROM tournament_matchups
-       WHERE session_id = $1 AND round_number = $2 AND winner_id IS NULL`,
+       WHERE session_id::text = $1 AND round_number = $2 AND winner_id IS NULL`,
       [sessionId, currentRound]
     );
 
@@ -299,7 +307,7 @@ export const endVoting = async (req: Request, res: Response): Promise<void> => {
         // Check if next round matchup exists
         const nextMatchupQuery = await pool.query(
           `SELECT * FROM tournament_matchups
-           WHERE session_id = $1 AND round_number = $2 AND position = $3`,
+           WHERE session_id::text = $1 AND round_number = $2 AND position = $3`,
           [sessionId, nextRound, nextPosition]
         );
 

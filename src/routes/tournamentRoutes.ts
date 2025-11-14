@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { authenticateToken, AuthRequest } from "../middleware/authMiddleware";
 
 // Import from existing tournament controller
 import {
@@ -18,36 +19,32 @@ import {
 const router = Router();
 
 // ============================================
-// PUBLIC ROUTES - Tournament Viewing & Voting
+// PUBLIC ROUTES - Tournament Viewing
 // ============================================
 
 // Get tournament bracket for a channel (public)
 router.get("/channels/:channelId/tournament", getTournament);
 
-// Vote on a matchup (auth checked in controller)
-router.post("/tournaments/matchups/:matchupId/vote", voteOnMatchup);
-
 // ============================================
-// MANAGEMENT ROUTES - Tournament Console (Owner Only)
+// AUTHENTICATED ROUTES
 // ============================================
 
-// Get tournament status for console dashboard (auth checked in controller)
-router.get("/tournaments/:sessionId/status", getTournamentStatus);
+// Vote on a matchup (requires auth, checks voting window)
+router.post("/tournaments/matchups/:matchupId/vote", authenticateToken, voteOnMatchup);
 
-// Start voting window for a round (auth checked in controller)
-router.post("/tournaments/:sessionId/voting/start", startVoting);
+// Get tournament status for console dashboard (requires auth)
+router.get("/tournaments/:sessionId/status", authenticateToken, getTournamentStatus);
 
-// End voting window and advance winners (auth checked in controller)
-router.post("/tournaments/:sessionId/voting/end", endVoting);
+// Start voting window for a round (requires auth)
+router.post("/tournaments/:sessionId/voting/start", authenticateToken, startVoting);
 
-// ============================================
-// ADMIN ROUTES - Manual Advancement (Testing/Admin)
-// ============================================
+// End voting window and advance winners (requires auth)
+router.post("/tournaments/:sessionId/voting/end", authenticateToken, endVoting);
 
-// Manually advance winner to next round
-router.post("/tournaments/matchups/:matchupId/advance", advanceWinner);
+// Manually advance winner to next round (requires auth)
+router.post("/tournaments/matchups/:matchupId/advance", authenticateToken, advanceWinner);
 
-// Manually advance entire round
-router.post("/tournaments/rounds/:sessionId/:roundNumber/advance-all", advanceAllInRound);
+// Manually advance entire round (requires auth)
+router.post("/tournaments/rounds/:sessionId/:roundNumber/advance-all", authenticateToken, advanceAllInRound);
 
 export default router;

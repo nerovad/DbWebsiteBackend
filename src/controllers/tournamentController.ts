@@ -1,6 +1,7 @@
 // tournamentController.ts
 import { Request, Response } from "express";
 import pool from "../../db/pool";
+import { AuthRequest } from "../middleware/authMiddleware";
 
 /**
  * GET /api/channels/:channelId/tournament
@@ -137,11 +138,11 @@ export async function getTournament(req: Request, res: Response): Promise<void> 
  * Records a vote for a film in a matchup
  * UPDATED: Now checks voting_window before allowing votes
  */
-export async function voteOnMatchup(req: Request, res: Response): Promise<void> {
+export async function voteOnMatchup(req: AuthRequest, res: Response): Promise<void> {
   try {
     const { matchupId } = req.params;
     const { filmId } = req.body;
-    const userId = (req as any).user?.id;
+    const userId = req.userId; // ✅ Use req.userId from auth middleware
 
     if (!filmId) {
       res.status(400).json({ error: "Film ID is required" });
