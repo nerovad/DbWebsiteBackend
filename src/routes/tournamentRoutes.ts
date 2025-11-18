@@ -6,7 +6,8 @@ import {
   getTournament,
   voteOnMatchup,
   advanceWinner,
-  advanceAllInRound
+  advanceAllInRound,
+  removeVote
 } from "../controllers/tournamentController";
 
 // Import from new tournament voting controller
@@ -46,5 +47,8 @@ router.post("/tournaments/matchups/:matchupId/advance", authenticateToken, advan
 
 // Manually advance entire round (requires auth)
 router.post("/tournaments/rounds/:sessionId/:roundNumber/advance-all", authenticateToken, advanceAllInRound);
+
+// Delete Vote
+router.delete('/tournaments/matchups/:matchupId/vote', authenticateToken, removeVote);
 
 export default router;

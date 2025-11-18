@@ -197,14 +197,13 @@ export async function getTournament(req: Request, res: Response): Promise<void> 
 /**
  * POST /api/tournaments/matchups/:matchupId/vote
  * Records a vote for a film in a matchup
- * UPDATED: Now checks voting_window before allowing votes
- * FIXED: Property name film_id and string comparison
+ * UPDATED: Now supports vote switching - if user already voted, changes their vote
  */
 export async function voteOnMatchup(req: AuthRequest, res: Response): Promise<void> {
   try {
     const { matchupId } = req.params;
-    const { film_id } = req.body; // ✅ FIXED: Changed from filmId to film_id
-    const userId = req.userId; // ✅ Use req.userId from auth middleware
+    const { film_id } = req.body;
+    const userId = req.userId;
 
     if (!film_id) {
       res.status(400).json({ error: "Film ID is required" });
@@ -227,7 +226,7 @@ export async function voteOnMatchup(req: AuthRequest, res: Response): Promise<vo
 
     const matchup = matchupResult.rows[0];
 
-    // NEW: Check if voting window is active
+    // Check if voting window is active
     const votingWindow = matchup.voting_window || { isActive: false, currentRound: null };
 
     if (!votingWindow.isActive) {
@@ -235,7 +234,7 @@ export async function voteOnMatchup(req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    // NEW: Check if voting is for the correct round
+    // Check if voting is for the correct round
     if (votingWindow.currentRound !== matchup.round_number) {
       res.status(400).json({
         error: `Voting is active for Round ${votingWindow.currentRound}, not Round ${matchup.round_number}`
@@ -243,8 +242,6 @@ export async function voteOnMatchup(req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    // ✅ CRITICAL FIX: Convert to string for comparison
-    // film1_id and film2_id are stored as strings in the database
     const filmIdStr = String(film_id);
 
     // Verify film is in this matchup
@@ -271,42 +268,79 @@ export async function voteOnMatchup(req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    // Check if user already voted (if logged in)
-    if (userId) {
-      const existingVote = await pool.query(
-        `SELECT id FROM tournament_votes 
-         WHERE matchup_id = $1 AND user_id = $2`,
-        [matchupId, userId]
-      );
-
-      if (existingVote.rows.length > 0) {
-        res.status(400).json({ error: "You have already voted on this matchup" });
-        return;
-      }
-    }
-
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
+      // ✅ NEW: Check if user already voted
+      let existingVote = null;
       if (userId) {
-        // ✅ Store as string in database
-        await client.query(
-          `INSERT INTO tournament_votes (matchup_id, user_id, film_id)
-           VALUES ($1, $2, $3)`,
-          [matchupId, userId, filmIdStr]
+        const existingVoteResult = await client.query(
+          `SELECT id, film_id FROM tournament_votes 
+           WHERE matchup_id = $1 AND user_id = $2`,
+          [matchupId, userId]
         );
+        existingVote = existingVoteResult.rows[0];
       }
 
-      // ✅ Use string for comparison
-      const voteColumn = filmIdStr === matchup.film1_id ? 'film1_votes' : 'film2_votes';
-      await client.query(
-        `UPDATE tournament_matchups 
-         SET ${voteColumn} = ${voteColumn} + 1,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = $1`,
-        [matchupId]
-      );
+      if (existingVote) {
+        // ✅ NEW: User is switching their vote
+        const oldFilmId = existingVote.film_id;
+
+        // Only proceed if they're voting for a different film
+        if (oldFilmId !== filmIdStr) {
+          // Decrement old film's vote count
+          const oldVoteColumn = oldFilmId === matchup.film1_id ? 'film1_votes' : 'film2_votes';
+          await client.query(
+            `UPDATE tournament_matchups 
+             SET ${oldVoteColumn} = GREATEST(0, ${oldVoteColumn} - 1),
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = $1`,
+            [matchupId]
+          );
+
+          // Update the vote record
+          await client.query(
+            `UPDATE tournament_votes 
+            SET film_id = $1
+            WHERE id = $2`,
+            [filmIdStr, existingVote.id]
+          );
+
+          // Increment new film's vote count
+          const newVoteColumn = filmIdStr === matchup.film1_id ? 'film1_votes' : 'film2_votes';
+          await client.query(
+            `UPDATE tournament_matchups 
+             SET ${newVoteColumn} = ${newVoteColumn} + 1,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = $1`,
+            [matchupId]
+          );
+
+          console.log(`✅ Vote switched from ${oldFilmId} to ${filmIdStr}`);
+        }
+      } else {
+        // New vote
+        if (userId) {
+          await client.query(
+            `INSERT INTO tournament_votes (matchup_id, user_id, film_id)
+             VALUES ($1, $2, $3)`,
+            [matchupId, userId, filmIdStr]
+          );
+        }
+
+        // Increment vote count
+        const voteColumn = filmIdStr === matchup.film1_id ? 'film1_votes' : 'film2_votes';
+        await client.query(
+          `UPDATE tournament_matchups 
+           SET ${voteColumn} = ${voteColumn} + 1,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $1`,
+          [matchupId]
+        );
+
+        console.log(`✅ New vote recorded for ${filmIdStr}`);
+      }
 
       await client.query('COMMIT');
 
@@ -317,7 +351,7 @@ export async function voteOnMatchup(req: AuthRequest, res: Response): Promise<vo
 
       res.json({
         success: true,
-        message: "Vote recorded successfully",
+        message: existingVote ? "Vote changed successfully" : "Vote recorded successfully",
         matchup: {
           id: updatedMatchup.rows[0].id,
           film1Votes: updatedMatchup.rows[0].film1_votes,
@@ -333,6 +367,125 @@ export async function voteOnMatchup(req: AuthRequest, res: Response): Promise<vo
   } catch (error) {
     console.error("Error recording vote:", error);
     res.status(500).json({ error: "Failed to record vote" });
+  }
+}
+
+/**
+ * DELETE /api/tournaments/matchups/:matchupId/vote
+ * Removes a user's vote from a matchup
+ * ✅ NEW FUNCTION - Add route: router.delete('/tournaments/matchups/:matchupId/vote', authenticateToken, removeVote);
+ */
+export async function removeVote(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { matchupId } = req.params;
+    const userId = req.userId;
+
+    if (!userId) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+
+    // Get matchup details including voting_window from session
+    const matchupResult = await pool.query(
+      `SELECT tm.*, s.voting_window
+       FROM tournament_matchups tm
+       JOIN sessions s ON s.id = tm.session_id
+       WHERE tm.id = $1`,
+      [matchupId]
+    );
+
+    if (matchupResult.rows.length === 0) {
+      res.status(404).json({ error: "Matchup not found" });
+      return;
+    }
+
+    const matchup = matchupResult.rows[0];
+
+    // Check if voting window is active
+    const votingWindow = matchup.voting_window || { isActive: false, currentRound: null };
+
+    if (!votingWindow.isActive) {
+      res.status(400).json({ error: "Voting is not currently active" });
+      return;
+    }
+
+    // Check if voting is for the correct round
+    if (votingWindow.currentRound !== matchup.round_number) {
+      res.status(400).json({
+        error: `Voting is active for Round ${votingWindow.currentRound}, not Round ${matchup.round_number}`
+      });
+      return;
+    }
+
+    // Check if matchup is already completed
+    if (matchup.winner_id) {
+      res.status(400).json({ error: "This matchup has already been decided" });
+      return;
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Get the user's existing vote
+      const voteResult = await client.query(
+        `SELECT film_id FROM tournament_votes 
+         WHERE matchup_id = $1 AND user_id = $2`,
+        [matchupId, userId]
+      );
+
+      if (voteResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: "You haven't voted on this matchup" });
+        return;
+      }
+
+      const filmId = voteResult.rows[0].film_id;
+
+      // Delete the vote record
+      await client.query(
+        `DELETE FROM tournament_votes 
+         WHERE matchup_id = $1 AND user_id = $2`,
+        [matchupId, userId]
+      );
+
+      // Decrement the vote count
+      const voteColumn = filmId === matchup.film1_id ? 'film1_votes' : 'film2_votes';
+      await client.query(
+        `UPDATE tournament_matchups 
+         SET ${voteColumn} = GREATEST(0, ${voteColumn} - 1),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1`,
+        [matchupId]
+      );
+
+      await client.query('COMMIT');
+
+      const updatedMatchup = await pool.query(
+        `SELECT * FROM tournament_matchups WHERE id = $1`,
+        [matchupId]
+      );
+
+      console.log(`✅ Vote removed for film ${filmId}`);
+
+      res.json({
+        success: true,
+        message: "Vote removed successfully",
+        matchup: {
+          id: updatedMatchup.rows[0].id,
+          film1Votes: updatedMatchup.rows[0].film1_votes,
+          film2Votes: updatedMatchup.rows[0].film2_votes,
+        },
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error("Error removing vote:", error);
+    res.status(500).json({ error: "Failed to remove vote" });
   }
 }
 
