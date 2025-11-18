@@ -216,9 +216,10 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
         );
       }
 
-      // ✅ TOURNAMENT BRACKET HANDLING - Add after session and films are created
+      // ✅ TOURNAMENT BRACKET HANDLING
       if (event?.kind === "tournament" && event?.tournament_bracket) {
         console.log("Creating tournament bracket for session:", sessionRow.id);
+        console.log("Available films in filmRows:", filmRows.map(f => ({ id: f.id, title: f.title })));
 
         // Store bracket structure in session
         await client.query(
@@ -232,28 +233,43 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
           const firstRound = bracket.rounds.find((r: any) => r.roundNumber === 1);
           if (firstRound && firstRound.matchups) {
             for (const matchup of firstRound.matchups) {
+              console.log("Processing matchup:", {
+                id: matchup.id,
+                film1: matchup.film1,
+                film2: matchup.film2
+              });
+
               // Get actual film database IDs by matching titles
               let film1DbId: number | null = null;
               let film2DbId: number | null = null;
 
-              if (matchup.film1?.filmId) {
-                const film1Match = filmRows.find(fr =>
-                  matchup.film1.title.toLowerCase() === fr.title.toLowerCase()
-                );
+              // ✅ Check for film1 existence (not film1.id)
+              if (matchup.film1) {
+                console.log(`Looking for film1: "${matchup.film1.title}"`);
+                const film1Match = filmRows.find(fr => {
+                  const match = matchup.film1.title.toLowerCase().trim() === fr.title.toLowerCase().trim();
+                  console.log(`  Comparing "${matchup.film1.title}" vs "${fr.title}" = ${match}`);
+                  return match;
+                });
                 film1DbId = film1Match?.id ?? null;
+                console.log(`  film1DbId: ${film1DbId}`);
               }
 
-              if (matchup.film2?.filmId) {
-                const film2Match = filmRows.find(fr =>
-                  matchup.film2.title.toLowerCase() === fr.title.toLowerCase()
-                );
+              // ✅ Check for film2 existence (not film2.id)
+              if (matchup.film2) {
+                console.log(`Looking for film2: "${matchup.film2.title}"`);
+                const film2Match = filmRows.find(fr => {
+                  const match = matchup.film2.title.toLowerCase().trim() === fr.title.toLowerCase().trim();
+                  console.log(`  Comparing "${matchup.film2.title}" vs "${fr.title}" = ${match}`);
+                  return match;
+                });
                 film2DbId = film2Match?.id ?? null;
+                console.log(`  film2DbId: ${film2DbId}`);
               }
-
               // Store film IDs as strings (matching your schema)
               await client.query(
                 `INSERT INTO tournament_matchups (session_id, matchup_id, round_number, position, film1_id, film2_id)
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                VALUES ($1, $2, $3, $4, $5, $6)`,
                 [
                   sessionRow.id,
                   matchup.id,

@@ -367,6 +367,17 @@ export const endVoting = async (req: AuthRequest, res: Response): Promise<void> 
       [JSON.stringify(closedVotingWindow), sessionId]
     );
 
+    // ✅ Update current_round if not final round
+    if (currentRound < totalRounds) {
+      await pool.query(
+        `UPDATE sessions 
+         SET current_round = $1
+         WHERE id = $2`,
+        [currentRound + 1, sessionId]
+      );
+      console.log(`📈 Advanced tournament to Round ${currentRound + 1}`);
+    }
+
     console.log(`✅ Voting ended. ${winnersAdvanced} winners advanced.`);
 
     res.json({
