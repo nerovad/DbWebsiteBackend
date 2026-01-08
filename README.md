@@ -1,12 +1,6 @@
-# DbWebsiteBackend
-
-This is a full-stack application for Dain Bramage TV, featuring a React frontend and a Node.js/Express backend with PostgreSQL and WebSockets (Socket.IO) support.
-
----
-
 ## Project Structure
 
-/dainBramageApp
+/Cinezoo
 ├── backend/ → Express + PostgreSQL API
 ├── frontend/ → React (Vite) client
 ├── .env → Environment variables (not committed)
