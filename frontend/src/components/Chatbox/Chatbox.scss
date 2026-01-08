@@ -1,0 +1,138 @@
+@use "../../styles/_variables.scss" as *;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+
+.chatbox-container {
+  font-family: $primary-font-family;
+  position: fixed;
+  top: 50px; 
+  right: 0; 
+  height: calc(100vh - 100px);
+  background-color: $background-color-primary;
+  transition: width 0.3s ease-in-out;
+  z-index: 10000;
+  box-shadow: -2px 0 5px rgba(0, 0, 0, 0.5); 
+  min-width: 30px;
+
+  &.open {
+    width: 250px;
+    overflow-y: auto; 
+  }
+
+  &:not(.open) {
+    width: 40px;
+    overflow: hidden; 
+  }
+}
+
+.toggle-button-right {
+  position: absolute;
+  top: 10px;
+  background-color: transparent;
+  right: calc(100% - 30px);
+  border: none;
+  cursor: pointer;
+  transition: transform 0.3s ease-in-out;
+  z-index: 10000;
+  transition: transform 0.12s ease-in-out, filter 0.12s ease-in-out;
+
+  &:hover {
+    transform: scale(1.2);
+    filter: drop-shadow(0 0 8px $primary-color) brightness(1.2);
+  }
+
+  img {
+    width: 20px;
+    height: 20px;
+    transition: transform 0.3s ease-in-out;
+    transform: rotate(180deg);
+  }
+  
+  &.open img {
+    transform: rotate(0deg);
+  }
+}
+
+.chatbox-content {
+  font-family: inherit;
+  height: 90vh;
+  overflow-y: auto;
+  padding: 0rem 1rem;
+  background-color: $background-color-primary;
+  color: white;
+  opacity: 0;
+  transform: translateX(10px);
+  transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+  
+  &.open {
+    display: flex;
+    flex-direction: column;
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  h3 {
+    font-family: inherit;
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+    font-weight: bold;
+    margin-top: 1rem;
+    text-align: center;
+  }
+
+  .messages {
+    font-family: inherit;
+    flex-grow: 1;
+    overflow-y: auto;
+    background: $background-color-primary;
+    border: 2px solid $border-color-primary;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+  }
+
+  input {
+    font-family: inherit;
+    width: 100%;
+    padding: 8px;
+    border-radius: 4px;
+    background: $background-color-primary;
+    border: 2px solid $border-color-primary;
+    color: white;
+    outline: none;
+
+    &:focus-within {
+      border: 2px solid $secondary-color;
+    }
+  }
+}
+
+.chat-button {
+  background-color: $primary-color;
+  font-family: inherit;
+  width: 100%;
+  color: white;
+  border: none;
+  margin-top: 7px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+
+  &:hover {
+    background-color: $secondary-color;
+    transform: scale(1.02);
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  &:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+  }
+}
+

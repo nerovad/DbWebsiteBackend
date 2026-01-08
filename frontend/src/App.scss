@@ -1,0 +1,53 @@
+@use "./styles/_variables.scss" as *;
+
+.app-grid {
+  display: grid;
+  grid-template-rows: 60px auto 40px; /* Navbar, Content, Ticker */
+  grid-template-columns: 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.main-content {
+  display: flex;
+  flex-direction: row;
+  height: calc(100vh - 50px);
+}
+
+/* Sidebar */
+.trending-container {
+  transition: width 0.3s ease-in-out;
+  width: 70px; /* Default collapsed */
+  background-color: $background-color-primary;
+  overflow-y: auto;
+
+  &.open {
+    width: 250px;
+  }
+}
+
+/* Video Player adjusts based on sidebar */
+.video-container-dboriginals {
+  flex: 1; /* Takes remaining space */
+  transition: margin-left 0.3s ease-in-out, margin-right 0.3s ease-in-out;
+  margin-left: 40px; /* Default when collapsed */
+  margin-right: 40px; /* Default for right spacing */
+
+  &.expanded-left {
+    margin-left: 250px; /* When menu opens */
+    width: calc(100vw - 250px);
+  }
+
+  &.expanded-right {
+    margin-right: 250px; /* When chatbox opens */
+    width: calc(100vw - 250px);
+  }
+
+  &.expanded-both {
+    margin-left: 250px;
+    margin-right: 250px;
+    width: calc(100vw - 500px);
+  }
+}
+
+
