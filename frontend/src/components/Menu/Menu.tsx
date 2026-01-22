@@ -319,6 +319,22 @@ const Utilities: React.FC<UtilitiesProps> = ({ isOpen, setIsOpen }) => {
     return () => { on = false; };
   }, [channelId]);
 
+  // Randomize lava lamp animation delays when sidebar opens
+  useEffect(() => {
+    if (!isOpen) return;
+    const lavaContainer = document.querySelector('.lava-lamp-bg') as HTMLElement;
+    if (!lavaContainer) return;
+
+    // Randomize animation delays for organic movement
+    const randomDelay1 = -Math.random() * 20;
+    const randomDelay2 = -Math.random() * 16;
+    const randomDelay3 = -Math.random() * 14;
+
+    lavaContainer.style.setProperty('--blob1-delay', `${randomDelay1}s`);
+    lavaContainer.style.setProperty('--blob2-delay', `${randomDelay2}s`);
+    lavaContainer.style.setProperty('--blob3-delay', `${randomDelay3}s`);
+  }, [isOpen]);
+
   const currentFilm: Film | null = films.length ? films[idx % films.length] : null;
   const [view, setView] = useState<"single" | "grid">("single");
 
@@ -377,6 +393,7 @@ const Utilities: React.FC<UtilitiesProps> = ({ isOpen, setIsOpen }) => {
     <>
       {/* === SIDEBAR === */}
       <div className={`utilities-container ${isOpen ? "open" : ""}`}>
+        <div className="lava-lamp-bg"></div>
         <button className={`toggle-button-left ${isOpen ? "open" : ""}`} onClick={toggleMenu}>
           <img src={RewindIcon} alt="Toggle" />
         </button>

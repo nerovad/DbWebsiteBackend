@@ -1,5 +1,11 @@
 @use "../../styles/_variables.scss" as *;
 
+// Lava lamp purple shades derived from $primary-color: #a259ff
+$lava-purple-bright: rgba($primary-color, 0.4);
+$lava-purple-mid: rgba($primary-color, 0.25);
+$lava-purple-dark: rgba($primary-color, 0.12);
+$lava-purple-accent: rgba(lighten($primary-color, 15%), 0.3);
+
 /* ===== YOUR ORIGINAL SIDEBAR STYLES (unchanged) ===== */
 .utilities-container {
   position: fixed;
@@ -76,6 +82,8 @@
   opacity: 0;
   transform: translateX(-10px);
   transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+  position: relative;
+  z-index: 2; // Above lava lamp (z-index: 0)
 
   &.open {
     display: flex;
@@ -124,6 +132,73 @@
       color: #ddd;
       margin-top: 2px;
     }
+  }
+}
+
+/* ===== LAVA LAMP BACKGROUND ===== */
+.lava-lamp-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none; // Clicks pass through
+  z-index: 0; // Behind menu content
+  opacity: 0; // Hidden when collapsed
+  transition: opacity 0.4s ease-in-out;
+  filter: blur(40px); // Lava lamp merging effect
+
+  // Show when sidebar is open
+  .utilities-container.open & {
+    opacity: 1;
+  }
+
+  // Blob 3: Container itself acts as third blob
+  background: radial-gradient(
+    circle at 50% 50%,
+    $lava-purple-mid 0%,
+    $lava-purple-dark 40%,
+    transparent 60%
+  );
+  animation: lava-float-3 14s ease-in-out infinite;
+  animation-delay: var(--blob3-delay, -8s);
+  will-change: opacity;
+
+  // Blob 1: Large slow-moving blob
+  &::before {
+    content: '';
+    position: absolute;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(
+      circle at center,
+      $lava-purple-bright 0%,
+      $lava-purple-mid 30%,
+      $lava-purple-dark 55%,
+      transparent 70%
+    );
+    animation: lava-float-1 20s ease-in-out infinite;
+    animation-delay: var(--blob1-delay, 0s);
+    will-change: transform;
+  }
+
+  // Blob 2: Medium blob with different path
+  &::after {
+    content: '';
+    position: absolute;
+    width: 180%;
+    height: 180%;
+    background: radial-gradient(
+      circle at center,
+      $lava-purple-accent 0%,
+      $lava-purple-mid 25%,
+      $lava-purple-dark 50%,
+      transparent 65%
+    );
+    animation: lava-float-2 16s ease-in-out infinite;
+    animation-delay: var(--blob2-delay, -5s);
+    will-change: transform;
   }
 }
 
@@ -340,6 +415,20 @@
 @media (prefers-reduced-motion: reduce) {
   .modal-backdrop { backdrop-filter: none; }
   .star { transition: none; }
+
+  // Disable lava lamp animations
+  .lava-lamp-bg {
+    animation: none !important;
+
+    &::before,
+    &::after {
+      animation: none !important;
+    }
+
+    // Show static gradient instead
+    opacity: 0.5;
+    filter: blur(60px);
+  }
 }
 .ballot-wrap {
   display: flex;
@@ -533,5 +622,61 @@
 @media (max-width: 640px) {
   .film-grid {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+}
+
+/* ===== LAVA LAMP ANIMATIONS ===== */
+
+// Blob 1: Slow circular path from bottom-left to top-right
+@keyframes lava-float-1 {
+  0% {
+    transform: translate(-30%, 40%) scale(1);
+  }
+  25% {
+    transform: translate(-10%, 10%) scale(1.1);
+  }
+  50% {
+    transform: translate(20%, -20%) scale(0.95);
+  }
+  75% {
+    transform: translate(10%, 30%) scale(1.05);
+  }
+  100% {
+    transform: translate(-30%, 40%) scale(1);
+  }
+}
+
+// Blob 2: Medium speed figure-8 pattern
+@keyframes lava-float-2 {
+  0% {
+    transform: translate(30%, -30%) scale(0.9);
+  }
+  30% {
+    transform: translate(-20%, 0%) scale(1.15);
+  }
+  60% {
+    transform: translate(20%, 30%) scale(0.85);
+  }
+  85% {
+    transform: translate(0%, -10%) scale(1.05);
+  }
+  100% {
+    transform: translate(30%, -30%) scale(0.9);
+  }
+}
+
+// Blob 3: Faster vertical oscillation
+@keyframes lava-float-3 {
+  0% {
+    transform: translate(0%, 50%) scale(1.1);
+  }
+  40% {
+    transform: translate(-15%, -30%) scale(0.9);
+  }
+  70% {
+    transform: translate(15%, 10%) scale(1.2);
+  }
+  100% {
+    transform: translate(0%, 50%) scale(1.1);
   }
 }
