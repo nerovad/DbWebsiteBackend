@@ -1,13 +1,19 @@
 import { create } from "zustand";
 
+interface Message {
+  user: string;
+  content: string;
+  created_at?: string;
+}
+
 interface ChatState {
   userId: number | null;
   channelId: string;
-  messages: { user: string; content: string }[];
+  messages: Message[];
   setUserId: (id: number) => void;
   setChannelId: (id: string) => void;
-  setMessages: (messages: { user: string; content: string }[]) => void;
-  addMessage: (message: { user: string; content: string }) => void;
+  setMessages: (messages: Message[]) => void;
+  addMessage: (message: Message) => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({

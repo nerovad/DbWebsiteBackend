@@ -36,6 +36,7 @@ export default function setupSocket(io: Server, pool: Pool) {
                FROM messages m
                JOIN users u ON u.id = m.user_id
                WHERE m.session_id = $1
+                 AND m.created_at > NOW() - INTERVAL '1 hour'
                ORDER BY m.created_at ASC`,
             [sessionId]
           )
@@ -45,6 +46,7 @@ export default function setupSocket(io: Server, pool: Pool) {
                  FROM messages m
                  JOIN users u ON u.id = m.user_id
                  WHERE m.channel_id = $1
+                   AND m.created_at > NOW() - INTERVAL '1 hour'
                  ORDER BY m.created_at ASC`,
               [channelDbId]
             )

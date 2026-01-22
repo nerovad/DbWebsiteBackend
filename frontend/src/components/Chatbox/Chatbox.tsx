@@ -18,26 +18,71 @@ interface ChatboxProps {
 const Chatbox: React.FC<ChatboxProps> = ({ isOpen, setIsOpen }) => {
   const { channelId, userId, setUserId, messages, setMessages, addMessage } = useChatStore();
   const [message, setMessage] = useState("");
+  const [isConnected, setIsConnected] = useState(false);
 
   // Load user id once
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (!token) return;
-    fetch("http://localhost:4000/api/profile", {
+    if (!token) {
+      console.warn("⚠️ No token found, user not logged in");
+      return;
+    }
+    console.log("🔑 Fetching user profile with token...");
+    fetch("http://localhost:4000/api/profile/me", {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then((r) => r.json())
-      .then((data) => data?.id && setUserId(data.id))
-      .catch((e) => console.error("Error fetching user ID:", e));
+      .then((r) => {
+        console.log("📡 Profile API response status:", r.status);
+        return r.json();
+      })
+      .then((data) => {
+        console.log("👤 Profile data received:", data);
+        if (data?.id) {
+          const numericId = typeof data.id === 'string' ? parseInt(data.id) : data.id;
+          console.log("✅ Setting userId to:", numericId);
+          setUserId(numericId);
+        } else {
+          console.error("❌ No id in profile data:", data);
+        }
+      })
+      .catch((e) => console.error("❌ Error fetching user ID:", e));
   }, [setUserId]);
+
+  // Track connection status
+  useEffect(() => {
+    const onConnect = () => {
+      console.log("✅ Socket connected");
+      setIsConnected(true);
+    };
+    const onDisconnect = () => {
+      console.log("❌ Socket disconnected");
+      setIsConnected(false);
+    };
+
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+
+    // Set initial state
+    setIsConnected(socket.connected);
+
+    return () => {
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+    };
+  }, []);
 
   // Join room + wire listeners
   useEffect(() => {
-    if (!channelId) return;
+    if (!channelId) {
+      console.warn("⚠️ No channelId set, cannot join room");
+      return;
+    }
 
+    console.log(`🔌 Joining room: ${channelId}`);
     socket.emit("joinRoom", { channelId });
 
     const onHistory = (chatHistory: any[]) => {
+      console.log(`📜 Received chat history for ${channelId}:`, chatHistory.length, "messages");
       const formatted = chatHistory.map((msg) => ({
         user: msg.username || "Unknown",
         content: msg.content,
@@ -47,6 +92,7 @@ const Chatbox: React.FC<ChatboxProps> = ({ isOpen, setIsOpen }) => {
     };
 
     const onReceive = (newMsg: { user: string; content: string; created_at?: string }) => {
+      console.log("📨 Received new message:", newMsg);
       addMessage({
         user: newMsg.user,
         content: newMsg.content,
@@ -65,9 +111,44 @@ const Chatbox: React.FC<ChatboxProps> = ({ isOpen, setIsOpen }) => {
     };
   }, [channelId, setMessages, addMessage]);
 
+  // Filter out messages older than 1 hour every minute
+  useEffect(() => {
+    const filterOldMessages = () => {
+      const oneHourAgo = Date.now() - 60 * 60 * 1000;
+      setMessages((prevMessages) =>
+        prevMessages.filter((msg) => {
+          if (!msg.created_at) return true;
+          const msgTime = new Date(msg.created_at).getTime();
+          return msgTime > oneHourAgo;
+        })
+      );
+    };
+
+    const interval = setInterval(filterOldMessages, 60 * 1000); // Check every minute
+    return () => clearInterval(interval);
+  }, [setMessages]);
+
   const sendMessage = () => {
     const text = message.trim();
-    if (!userId || !channelId || !text) return;
+    if (!text) {
+      console.warn("⚠️ Cannot send empty message");
+      return;
+    }
+    if (!userId) {
+      console.error("❌ Cannot send message: userId is", userId);
+      alert("Please log in to send messages");
+      return;
+    }
+    if (!channelId) {
+      console.error("❌ Cannot send message: channelId is", channelId);
+      return;
+    }
+    if (!isConnected) {
+      console.error("❌ Cannot send message: socket not connected");
+      alert("Chat not connected. Please refresh the page.");
+      return;
+    }
+    console.log("📤 Sending message:", { userId, channelId, text });
     socket.emit("sendMessage", { userId, message: text, channelId });
     setMessage("");
   };

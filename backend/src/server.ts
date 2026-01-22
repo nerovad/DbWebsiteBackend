@@ -20,7 +20,7 @@ import awardRoutes from "./routes/awardRoutes";
 import companyRoutes from "./routes/companyRoutes";
 import tournamentRoutes from "./routes/tournamentRoutes";
 
-dotenv.config({ path: path.resolve(__dirname, "../.env") });
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
 const app = express();
 const server = http.createServer(app);
@@ -61,6 +61,26 @@ app.use(errorHandler);
 
 // Socket Setup
 setupSocket(io, pool);
+
+// Cleanup old messages every 10 minutes
+const cleanupOldMessages = async () => {
+  try {
+    const result = await pool.query(
+      `DELETE FROM messages WHERE created_at < NOW() - INTERVAL '1 hour'`
+    );
+    if (result.rowCount && result.rowCount > 0) {
+      console.log(`🧹 Cleaned up ${result.rowCount} old messages`);
+    }
+  } catch (err) {
+    console.error("Error cleaning up old messages:", err);
+  }
+};
+
+// Run cleanup every 10 minutes
+setInterval(cleanupOldMessages, 10 * 60 * 1000);
+
+// Run cleanup once on startup
+cleanupOldMessages();
 
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
