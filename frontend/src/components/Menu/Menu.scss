@@ -77,7 +77,7 @@ $lava-purple-accent: rgba(lighten($primary-color, 15%), 0.3);
 .utilities-menu {
   font-family: inherit;
   padding: 0rem 1rem;
-  background-color: $background-color-primary;
+  background-color: transparent; // Changed from solid to transparent so lavalamp shows through
   color: white;
   opacity: 0;
   transform: translateX(-10px);
