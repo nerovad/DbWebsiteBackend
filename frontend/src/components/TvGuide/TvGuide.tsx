@@ -92,6 +92,17 @@ const TvGuide: React.FC<TvGuideProps> = ({ isOpen, closeGuide }) => {
     };
   }, [isOpen, storeChannels]);
 
+  // Sort channels by channel_number
+  const sortedChannels = useMemo(() => {
+    return [...channels].sort((a, b) => {
+      // Put channels without numbers at the end
+      if (a.channel_number === undefined && b.channel_number === undefined) return 0;
+      if (a.channel_number === undefined) return 1;
+      if (b.channel_number === undefined) return -1;
+      return a.channel_number - b.channel_number;
+    });
+  }, [channels]);
+
   const handleChannelClick = (channel: Channel) => {
     // Use the same navigation logic as profile.tsx
     const url = channel.slug ? `/channel/${channel.slug}` : `/channel/${channel.id}`;
@@ -115,7 +126,7 @@ const TvGuide: React.FC<TvGuideProps> = ({ isOpen, closeGuide }) => {
           <p className="no-channels">No channels available yet.</p>
         ) : (
           <ul>
-            {channels.map((channel) => (
+            {sortedChannels.map((channel) => (
               <li key={channel.id}>
                 <button
                   className="channel-link"
