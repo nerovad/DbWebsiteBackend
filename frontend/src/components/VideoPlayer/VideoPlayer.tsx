@@ -37,12 +37,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ isMenuOpen, isChatOpen, setVi
   const endedListenerRef = useRef<(() => void) | null>(null);
   const switchingRef = useRef(false);
   const retryRef = useRef(0);
+  const initialLoadRef = useRef(false);
+  const goToNextVideoRef = useRef<(() => void) | null>(null);
 
   const { setChannelId } = useChatStore();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [channelName, setChannelName] = useState("");
   const [isMuted, setIsMuted] = useState(true);
   const [showMuteIcon, setShowMuteIcon] = useState(false);
+  const [isVideoReady, setIsVideoReady] = useState(false);
   const [videoLinks, setVideoLinks] = useState<VideoLink[]>([
     { src: "/videos/Color_Bars_DB_Web.mp4", channel: "channel-0", channelNumber: 0, isLive: false },
   ]);
@@ -76,18 +79,30 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ isMenuOpen, isChatOpen, setVi
   const attachEndedForMp4 = () => {
     const v = videoRef.current;
     if (!v) return;
-    const onEnded = () => goToNextVideo();
+    const onEnded = () => {
+      console.log("[attachEndedForMp4] Video ended, calling goToNextVideo");
+      if (goToNextVideoRef.current) {
+        goToNextVideoRef.current();
+      } else {
+        console.log("[attachEndedForMp4] goToNextVideoRef.current is null!");
+      }
+    };
     v.addEventListener("ended", onEnded);
     endedListenerRef.current = () => v.removeEventListener("ended", onEnded);
   };
 
   const loadVideo = useCallback((src: string) => {
+    console.log("[loadVideo] Loading:", src);
     const v = videoRef.current;
-    if (!v) return;
+    if (!v) {
+      console.log("[loadVideo] No video element!");
+      return;
+    }
 
     cleanupHls();
 
     if (src.endsWith(".mp4")) {
+      console.log("[loadVideo] Loading MP4, attaching ended listener");
       v.src = src;
       attachEndedForMp4();
       v.muted = true;
@@ -124,16 +139,16 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ isMenuOpen, isChatOpen, setVi
             retryRef.current += 1;
             (hls as any).startLoad?.();
           } else {
-            goToNextVideo();
+            goToNextVideoRef.current?.();
           }
         } else if (type === "mediaError") {
           try {
             (hls as any).recoverMediaError?.();
           } catch {
-            goToNextVideo();
+            goToNextVideoRef.current?.();
           }
         } else {
-          goToNextVideo();
+          goToNextVideoRef.current?.();
         }
       });
 
@@ -153,11 +168,16 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ isMenuOpen, isChatOpen, setVi
 
   // ✅ Navigate to new channel URL
   const switchToIndex = (idx: number) => {
-    if (switchingRef.current) return;
+    console.log("[switchToIndex] Called with idx:", idx, "videoLinks.length:", videoLinks.length);
+    if (switchingRef.current) {
+      console.log("[switchToIndex] Already switching, ignoring");
+      return;
+    }
     switchingRef.current = true;
 
     const safeIdx = ((idx % videoLinks.length) + videoLinks.length) % videoLinks.length;
     const dest = videoLinks[safeIdx];
+    console.log("[switchToIndex] Navigating to:", dest.channel, "at index:", safeIdx);
 
     // ✅ Update URL instead of just state
     navigate(`/channel/${dest.channel}`, { replace: true });
@@ -169,6 +189,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ isMenuOpen, isChatOpen, setVi
 
   const goToNextVideo = useCallback(() => switchToIndex(currentIndex + 1), [currentIndex, videoLinks.length]);
   const goToPreviousVideo = useCallback(() => switchToIndex(currentIndex - 1), [currentIndex, videoLinks.length]);
+
+  // Keep ref updated so loadVideo can always call the latest version
+  useEffect(() => {
+    goToNextVideoRef.current = goToNextVideo;
+  }, [goToNextVideo]);
 
   const toggleMute = () => {
     const v = videoRef.current;
@@ -186,6 +211,20 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ isMenuOpen, isChatOpen, setVi
     if (!document.fullscreenElement) v.requestFullscreen().catch(() => { });
     else document.exitFullscreen().catch(() => { });
   };
+
+  // Set video ready state when component mounts
+  useEffect(() => {
+    const checkVideo = () => {
+      if (videoRef.current && !isVideoReady) {
+        console.log("[VideoPlayer] Video element is ready");
+        setIsVideoReady(true);
+      } else if (!videoRef.current) {
+        // Retry on next frame if not ready yet
+        requestAnimationFrame(checkVideo);
+      }
+    };
+    checkVideo();
+  }, []);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -242,20 +281,43 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ isMenuOpen, isChatOpen, setVi
   }, []);
   // ✅ Sync URL parameter to video player state
   useEffect(() => {
-    if (!channelSlug || videoLinks.length === 0) return;
+    console.log("[VideoPlayer] Sync effect running:", {
+      channelSlug,
+      videoLinksLength: videoLinks.length,
+      currentIndex,
+      initialLoad: initialLoadRef.current,
+      isVideoReady
+    });
+
+    if (!channelSlug || videoLinks.length === 0) {
+      console.log("[VideoPlayer] Exiting early - no channelSlug or videoLinks");
+      return;
+    }
+
+    if (!isVideoReady) {
+      console.log("[VideoPlayer] Exiting early - video element not ready yet");
+      return;
+    }
 
     const idx = videoLinks.findIndex(link => link.channel === channelSlug);
-    if (idx !== -1 && idx !== currentIndex) {
+    console.log("[VideoPlayer] Found index for", channelSlug, ":", idx);
+
+    // Load video if: 1) switching to a different channel, OR 2) initial load
+    if (idx !== -1 && (idx !== currentIndex || !initialLoadRef.current)) {
+      console.log("[VideoPlayer] Loading video:", videoLinks[idx]);
       setCurrentIndex(idx);
       const link = videoLinks[idx];
       loadVideo(link.src);
       setChannelId(link.channel);
       setChannelName(link.channel);
+      initialLoadRef.current = true;
 
       const hide = setTimeout(() => setChannelName(""), 7000);
       return () => clearTimeout(hide);
+    } else {
+      console.log("[VideoPlayer] Skipping load:", { idx, currentIndex, initialLoad: initialLoadRef.current });
     }
-  }, [channelSlug, videoLinks]);
+  }, [channelSlug, videoLinks, isVideoReady, loadVideo, setChannelId]);
 
   // ✅ Provide controls to NavBar
   useEffect(() => {
