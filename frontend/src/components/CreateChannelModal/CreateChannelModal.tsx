@@ -59,6 +59,10 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, onChannelCreated
   // Schedule for Now Playing widget
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
 
+  // Metadata tags
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
+
   // Track taken channel numbers
   const [takenChannelNumbers, setTakenChannelNumbers] = useState<Set<number>>(new Set());
   const [loadingChannels, setLoadingChannels] = useState(false);
@@ -155,6 +159,26 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, onChannelCreated
   const updateScheduleItem = (idx: number, patch: Partial<ScheduleItem>) =>
     setScheduleItems(prev => prev.map((item, i) => (i === idx ? { ...item, ...patch } : item)));
 
+  // Tag helpers
+  const addTag = (tag: string) => {
+    const trimmed = tag.trim().toLowerCase();
+    if (trimmed && !tags.includes(trimmed)) {
+      setTags(prev => [...prev, trimmed]);
+    }
+    setTagInput("");
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    setTags(prev => prev.filter(t => t !== tagToRemove));
+  };
+
+  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addTag(tagInput);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit()) return;
@@ -178,6 +202,7 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, onChannelCreated
         widgets: selectedWidgets.length > 0 ? selectedWidgets : null,
         about_text: aboutText || null,
         schedule: normalizedSchedule.length > 0 ? normalizedSchedule : null,
+        tags: tags.length > 0 ? tags : null,
       };
 
       const token = localStorage.getItem("token");
@@ -205,6 +230,8 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, onChannelCreated
       setSelectedWidgets([]);
       setAboutText("");
       setScheduleItems([]);
+      setTags([]);
+      setTagInput("");
       setSuccess(true);
 
       // Notify parent
@@ -268,6 +295,47 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, onChannelCreated
               required
             />
             <small className="form-hint">{displayName.length}/20 characters</small>
+          </div>
+
+          {/* Tags */}
+          <div className="row">
+            <label htmlFor="tag-input">Tags</label>
+            <div className="tag-input-container">
+              <input
+                id="tag-input"
+                type="text"
+                placeholder="Type a tag and press Enter..."
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={handleTagKeyDown}
+              />
+              <button
+                type="button"
+                className="btn-secondary small"
+                onClick={() => addTag(tagInput)}
+                disabled={!tagInput.trim()}
+              >
+                Add
+              </button>
+            </div>
+            {tags.length > 0 && (
+              <div className="tags-list">
+                {tags.map(tag => (
+                  <span key={tag} className="tag-chip">
+                    {tag}
+                    <button
+                      type="button"
+                      className="tag-remove"
+                      onClick={() => removeTag(tag)}
+                      aria-label={`Remove ${tag}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <small className="form-hint">Add tags to help categorize your channel (e.g., horror, comedy, indie)</small>
           </div>
 
           {/* Widget Selector - General widgets only */}

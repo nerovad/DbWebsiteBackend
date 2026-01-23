@@ -438,7 +438,7 @@ const Profile: React.FC = () => {
                           Edit
                         </button>
                         <button
-                          className="btn btn-event"
+                          className="btn"
                           onClick={() => setAddingEventToChannel(ch)}
                         >
                           Add Event
@@ -447,10 +447,10 @@ const Profile: React.FC = () => {
                         {/* Manager button - opens modal instead of navigating */}
                         {ch.event_type?.toLowerCase() === 'tournament' && ch.session_id && (
                           <button
-                            className="btn btn-manager"
+                            className="btn"
                             onClick={() => setTournamentConsoleChannel(ch)}
                           >
-                            Manager
+                            Manage Event
                           </button>
                         )}
 

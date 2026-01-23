@@ -7,7 +7,14 @@ import "../../styles/_variables.scss";
 import muteIcon from "../../assets/mute_icon.svg";
 import { useChatStore } from "../../store/useChatStore";
 
-interface VideoLink { src: string; channel: string; isLive?: boolean; channelNumber: number; }
+interface VideoLink {
+  src: string;
+  channel: string;
+  isLive?: boolean;
+  channelNumber: number;
+  displayName?: string;
+  tags?: string[];
+}
 
 interface VideoPlayerProps {
   isMenuOpen: boolean;
@@ -255,6 +262,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ isMenuOpen, isChatOpen, setVi
               src,
               channel: ch.slug ?? key,
               channelNumber: ch.channel_number ?? 0,
+              displayName: ch.display_name ?? null,
+              tags: ch.tags ?? [],
               isLive: true
             };
           })

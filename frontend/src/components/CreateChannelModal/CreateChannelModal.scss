@@ -711,3 +711,55 @@
   }
 }
 
+/* === Tag Input === */
+.tag-input-container {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+
+  input {
+    flex: 1;
+  }
+}
+
+.tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  background: rgba($secondary-color, 0.2);
+  border: 1px solid rgba($secondary-color, 0.4);
+  border-radius: 20px;
+  font-size: 0.85rem;
+  color: $text-color-primary;
+
+  .tag-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: none;
+    background: rgba(255, 255, 255, 0.15);
+    color: $text-color-primary;
+    border-radius: 50%;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: rgba($secondary-color, 0.5);
+      color: #fff;
+    }
+  }
+}
+

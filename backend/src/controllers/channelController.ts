@@ -71,6 +71,7 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       widgets, // [{ type, order, config? }]
       about_text, // Markdown text for About widget
       first_live_at, // When channel first went live
+      tags, // Metadata tags for channel discovery
     } = req.body as {
       name: string;
       slug?: string;
@@ -99,6 +100,7 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       }>;
       about_text?: string;
       first_live_at?: string | null;
+      tags?: string[];
     };
 
     if (!name && !slug) {
@@ -136,13 +138,15 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
          set name = $2, stream_url = $3, display_name = $4, channel_number = $5,
              widgets = COALESCE($6, widgets),
              about_text = COALESCE($7, about_text),
-             first_live_at = COALESCE($8, first_live_at)
+             first_live_at = COALESCE($8, first_live_at),
+             tags = COALESCE($9, tags)
          where id = $1
-         returning id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, widgets, about_text, first_live_at, created_at`,
+         returning id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, widgets, about_text, first_live_at, tags, created_at`,
         [row.id, name ?? row.name, stream_url ?? row.stream_url, display_name ?? row.display_name, channel_number ?? row.channel_number,
          widgets ? JSON.stringify(widgets) : null,
          about_text ?? null,
-         first_live_at ?? null]
+         first_live_at ?? null,
+         tags && tags.length > 0 ? tags : null]
       );
       channel = upd.rows[0];
     } else {
@@ -153,13 +157,14 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
 
       const chResult = await client.query(
         `insert into channels
-           (owner_id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, widgets, about_text, first_live_at, created_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, now())
-         returning id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, widgets, about_text, first_live_at, created_at`,
+           (owner_id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, widgets, about_text, first_live_at, tags, created_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now())
+         returning id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, widgets, about_text, first_live_at, tags, created_at`,
         [uid, slug, name ?? slug, stream_url ?? null, streamKey, ingestApp, playbackPath, display_name ?? null, channel_number ?? null,
          widgets ? JSON.stringify(widgets) : null,
          about_text ?? null,
-         first_live_at ?? null]
+         first_live_at ?? null,
+         tags && tags.length > 0 ? tags : null]
       );
       channel = chResult.rows[0];
     }
@@ -330,7 +335,7 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
 export async function listChannels(_req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { rows } = await pool.query(
-      `select id, slug, name, stream_url, stream_key, ingest_app, playback_path, channel_number, created_at
+      `select id, slug, name, stream_url, stream_key, ingest_app, playback_path, channel_number, display_name, tags, created_at
        from channels order by created_at desc`
     );
     res.json(rows);

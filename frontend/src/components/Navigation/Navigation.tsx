@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FaUserCircle, FaVolumeMute, FaExpand, FaTv } from "react-icons/fa";
 import Logo from "../../assets/cinezoo_logo_neon_7.svg";
@@ -11,12 +11,14 @@ import Mute from "../../assets/mute_icon.svg"
 import CreateChannelModal from "../CreateChannelModal/CreateChannelModal";
 import { useChatStore } from "../../store/useChatStore";
 
+type VideoLinkType = { src: string; channel: string; channelNumber: number; displayName?: string; tags?: string[] };
+
 interface NavBarProps {
   isLoggedIn: boolean;
   setIsLoggedIn: React.Dispatch<React.SetStateAction<boolean>>;
   currentIndex: number;
   setCurrentIndex: React.Dispatch<React.SetStateAction<number>>;
-  videoLinks: { src: string; channel: string; channelNumber: number }[];
+  videoLinks: VideoLinkType[];
   videoRef: React.RefObject<HTMLVideoElement>;
   setIsGuideOpen?: React.Dispatch<React.SetStateAction<boolean>>;
   goToNextVideo: () => void;
@@ -46,38 +48,94 @@ const SearchNavBar: React.FC<NavBarProps> = ({
   setAuthMode,
 }) => {
   const navigate = useNavigate();
-  const [showDropdown, setShowDropdown] = useState(false);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [channelInput, setChannelInput] = useState("");
-  const [isCreateOpen, setIsCreateOpen] = useState(false); // ⬅️ modal state
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
   const { setChannelId } = useChatStore();
 
-  // Add this right at the top of the component, after the state declarations
-  console.log("Current videoLinks:", videoLinks);
-  console.log("Current index:", currentIndex);
-  console.log("Current channel number:", videoLinks[currentIndex]?.channelNumber);
+  // Current channel info for placeholder
+  const currentChannel = videoLinks[currentIndex];
+  const placeholderText = currentChannel
+    ? `${currentChannel.channelNumber}${currentChannel.displayName ? ` - ${currentChannel.displayName}` : ''}`
+    : "Search channels...";
+
+  // Search results - filter channels based on input
+  const searchResults = useMemo(() => {
+    const searchTerm = channelInput.trim().toLowerCase();
+    if (!searchTerm) return [];
+
+    const results: { channel: VideoLinkType; matchType: 'number' | 'name' | 'tag'; matchedTag?: string }[] = [];
+
+    videoLinks.forEach(v => {
+      // Check channel number
+      const targetNumber = parseInt(channelInput, 10);
+      if (!isNaN(targetNumber) && v.channelNumber === targetNumber) {
+        results.push({ channel: v, matchType: 'number' });
+        return;
+      }
+
+      // Check display name
+      if (v.displayName?.toLowerCase().includes(searchTerm)) {
+        results.push({ channel: v, matchType: 'name' });
+        return;
+      }
+
+      // Check tags
+      const matchedTag = v.tags?.find(tag => tag.toLowerCase().includes(searchTerm));
+      if (matchedTag) {
+        results.push({ channel: v, matchType: 'tag', matchedTag });
+      }
+    });
+
+    return results;
+  }, [channelInput, videoLinks]);
+
+  // Close search dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowSearchDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
     setIsLoggedIn(false);
   };
 
-  const goToChannel = () => {
-    const targetChannelNumber = parseInt(channelInput, 10);
-    if (isNaN(targetChannelNumber)) {
-      alert("Invalid channel number");
-      return;
-    }
-
-    const targetIndex = videoLinks.findIndex(v => v.channelNumber === targetChannelNumber);
-
+  const selectChannel = (channel: VideoLinkType) => {
+    const targetIndex = videoLinks.findIndex(v => v.channel === channel.channel);
     if (targetIndex !== -1) {
-      const targetChannel = videoLinks[targetIndex];
       setCurrentIndex(targetIndex);
-      loadVideo(targetChannel.src);
-      setChannelId(targetChannel.channel); // ⬅️ ADD THIS: Update the store
-      navigate(`/channel/${targetChannel.channel}`, { replace: true });
-    } else {
-      alert(`Channel ${targetChannelNumber} not found`);
+      loadVideo(channel.src);
+      setChannelId(channel.channel);
+      navigate(`/channel/${channel.channel}`, { replace: true });
+      setChannelInput("");
+      setShowSearchDropdown(false);
+    }
+  };
+
+  const goToChannel = () => {
+    if (searchResults.length > 0) {
+      selectChannel(searchResults[0].channel);
+    } else if (channelInput.trim()) {
+      alert(`No channel found matching "${channelInput}"`);
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setChannelInput(e.target.value);
+    setShowSearchDropdown(e.target.value.trim().length > 0);
+  };
+
+  const handleInputFocus = () => {
+    if (channelInput.trim().length > 0) {
+      setShowSearchDropdown(true);
     }
   };
 
@@ -106,18 +164,39 @@ const SearchNavBar: React.FC<NavBarProps> = ({
           <img src={TvGuide} alt="TV Guide" />
         </button>
 
-        <div className="search-navbar__channel-input-container">
+        <div className="search-navbar__channel-input-container" ref={searchContainerRef}>
           <input
             type="text"
             value={channelInput}
-            onChange={(e) => setChannelInput(e.target.value)}
-            placeholder={`${videoLinks[currentIndex]?.channelNumber ?? currentIndex}`} // ⬅️ Show channel number
+            onChange={handleInputChange}
+            onFocus={handleInputFocus}
+            placeholder={placeholderText}
             className="channel-input"
             onKeyDown={(e) => e.key === "Enter" && goToChannel()}
           />
           <button className="channel-go-button" onClick={goToChannel}>
             Go
           </button>
+
+          {showSearchDropdown && searchResults.length > 0 && (
+            <div className="search-dropdown">
+              {searchResults.map(({ channel, matchType, matchedTag }) => (
+                <div
+                  key={channel.channel}
+                  className="search-dropdown__item"
+                  onClick={() => selectChannel(channel)}
+                >
+                  <span className="search-dropdown__channel-number">{channel.channelNumber}</span>
+                  <span className="search-dropdown__channel-name">
+                    {channel.displayName || channel.channel}
+                  </span>
+                  {matchType === 'tag' && matchedTag && (
+                    <span className="search-dropdown__tag">#{matchedTag}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Mute Button */}
@@ -154,9 +233,9 @@ const SearchNavBar: React.FC<NavBarProps> = ({
             </button>
           </>
         ) : (
-          <div className="search-navbar__profile" onClick={() => setShowDropdown(!showDropdown)}>
+          <div className="search-navbar__profile" onClick={() => setShowProfileDropdown(!showProfileDropdown)}>
             <FaUserCircle className="search-navbar__profile-icon" size={24} />
-            {showDropdown && (
+            {showProfileDropdown && (
               <div className="profile-dropdown" onClick={(e) => e.stopPropagation()}>
                 <Link to="/profile" className="profile-dropdown__item">My Space</Link>
                 <button onClick={handleLogout} className="profile-dropdown__logout">Log out</button>
