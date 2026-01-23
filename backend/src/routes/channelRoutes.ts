@@ -55,7 +55,7 @@ router.get("/:slug/schedule", (req: Request, res: Response) => {
 });
 
 // POST /api/channels/:slug/schedule - Create/update schedule items
-router.post("/:slug/schedule", (req: Request, res: Response) => {
+router.post("/:slug/schedule", authenticateToken, (req: AuthRequest, res: Response) => {
   updateChannelSchedule(req, res);
 });
 

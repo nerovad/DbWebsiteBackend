@@ -369,10 +369,19 @@ export async function getChannel(req: Request, res: Response, next: NextFunction
 
     const latestSession = session.rows[0] ?? null;
 
+    // Fetch all sessions for this channel (for event history)
+    const allSessions = await pool.query(
+      `select id, title, starts_at, ends_at, status, event_type, created_at
+       from sessions where channel_id = $1
+       order by starts_at desc`,
+      [channel.id]
+    );
+
     res.json({
       ...channel,
       latestSession: latestSession,
       event_type: latestSession?.event_type ?? null, // ✅ Add event_type at top level for easy frontend access
+      sessions: allSessions.rows, // ✅ Add all sessions for event history
     });
   } catch (err) {
     next(err);
@@ -629,36 +638,71 @@ export async function getChannelSchedule(req: Request, res: Response): Promise<v
     }
     const channelId = chResult.rows[0].id;
 
+    console.log('Fetching schedule for channel:', { slug, channelId });
+
     const now = new Date();
 
-    // Get now playing (currently airing or most recent scheduled)
-    const nowResult = await client.query(
-      `SELECT cs.*, f.title as film_title, f.id as film_id
+    // Get ALL schedule items for this channel
+    const allResult = await client.query(
+      `SELECT cs.*,
+              COALESCE(f.title, cs.title) as display_title,
+              f.id as film_id
        FROM channel_schedule cs
        LEFT JOIN films f ON cs.film_id = f.id
        WHERE cs.channel_id = $1
-         AND cs.scheduled_at <= $2
-       ORDER BY cs.scheduled_at DESC
-       LIMIT 1`,
-      [channelId, now]
+       ORDER BY cs.scheduled_at ASC`,
+      [channelId]
     );
 
-    // Get up next (future scheduled items)
-    const upNextResult = await client.query(
-      `SELECT cs.*, f.title as film_title, f.id as film_id
-       FROM channel_schedule cs
-       LEFT JOIN films f ON cs.film_id = f.id
-       WHERE cs.channel_id = $1
-         AND cs.scheduled_at > $2
-       ORDER BY cs.scheduled_at ASC
-       LIMIT 5`,
-      [channelId, now]
-    );
+    console.log('Found schedule items:', allResult.rows.length);
+
+    if (allResult.rows.length === 0) {
+      res.json({
+        now_playing: null,
+        up_next: [],
+        schedule: []
+      });
+      return;
+    }
+
+    // Separate into now playing and up next
+    let nowPlaying = null;
+    const upNext: any[] = [];
+
+    for (const item of allResult.rows) {
+      const scheduledTime = new Date(item.scheduled_at);
+      const endTime = item.duration_seconds
+        ? new Date(scheduledTime.getTime() + item.duration_seconds * 1000)
+        : new Date(scheduledTime.getTime() + 3600000); // Default 1 hour if no duration
+
+      if (scheduledTime <= now && now < endTime) {
+        // Currently airing
+        nowPlaying = item;
+      } else if (scheduledTime > now) {
+        // Future items
+        upNext.push(item);
+      }
+    }
+
+    // If nothing is currently airing, use the most recent past item
+    if (!nowPlaying && allResult.rows.length > 0) {
+      const pastItems = allResult.rows.filter(item => new Date(item.scheduled_at) <= now);
+      if (pastItems.length > 0) {
+        nowPlaying = pastItems[pastItems.length - 1];
+      }
+    }
+
+    // If still nothing, use the first upcoming item
+    if (!nowPlaying && upNext.length > 0) {
+      nowPlaying = upNext.shift();
+    }
+
+    console.log('Schedule result:', { nowPlaying: !!nowPlaying, upNextCount: upNext.length });
 
     res.json({
-      now_playing: nowResult.rows[0] || null,
-      up_next: upNextResult.rows,
-      schedule: [...nowResult.rows, ...upNextResult.rows]
+      now_playing: nowPlaying,
+      up_next: upNext.slice(0, 5), // Limit to 5 upcoming
+      schedule: allResult.rows
     });
   } catch (error) {
     console.error('Error fetching schedule:', error);
@@ -670,38 +714,107 @@ export async function getChannelSchedule(req: Request, res: Response): Promise<v
 
 // POST /api/channels/:slug/schedule - Create/update schedule items
 export async function updateChannelSchedule(req: Request, res: Response): Promise<void> {
+  console.log('=== SCHEDULE UPDATE STARTED ===');
+  console.log('Request params:', req.params);
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
+  console.log('Request headers:', {
+    authorization: req.headers.authorization ? 'Present' : 'Missing',
+    contentType: req.headers['content-type']
+  });
+
   const { slug } = req.params;
   const uid = authUserIdOr401(req, res);
-  if (uid === null) return;
+
+  console.log('Auth check result - uid:', uid);
+
+  if (uid === null) {
+    console.log('Auth failed - returning 401');
+    return;
+  }
 
   const { schedule } = req.body; // Array of {film_id, title, scheduled_at, duration_seconds}
 
+  console.log('Update schedule request:', { slug, uid, scheduleCount: schedule?.length });
+  console.log('Schedule items:', JSON.stringify(schedule, null, 2));
+
+  if (!schedule || !Array.isArray(schedule)) {
+    console.log('ERROR: Schedule is not an array');
+    res.status(400).json({ error: 'Schedule must be an array' });
+    return;
+  }
+
+  if (schedule.length === 0) {
+    console.log('WARNING: Schedule array is empty');
+  }
+
   const client = await pool.connect();
+  console.log('Database client acquired');
 
   try {
+    console.log('Starting transaction...');
     await client.query('BEGIN');
+    console.log('Transaction started');
 
     // Get channel and verify ownership
+    console.log('Looking up channel by slug:', slug);
     const chResult = await client.query(
       'SELECT id, owner_id FROM channels WHERE slug = $1',
       [slug]
     );
+
+    console.log('Channel query result:', chResult.rows);
+
     if (chResult.rows.length === 0) {
+      console.log('ERROR: Channel not found');
       await client.query('ROLLBACK');
       res.status(404).json({ error: 'Channel not found' });
       return;
     }
 
     const channel = chResult.rows[0];
+    console.log('Channel found:', { channelId: channel.id, ownerId: channel.owner_id, requestUid: uid });
+
     if (channel.owner_id !== uid) {
+      console.log('ERROR: User does not own this channel');
       await client.query('ROLLBACK');
       res.status(403).json({ error: 'Not authorized' });
       return;
     }
 
+    console.log('Authorization passed, proceeding with inserts...');
+
     // Insert schedule items (upsert on conflict)
-    for (const item of schedule) {
-      await client.query(
+    let insertedCount = 0;
+    for (let i = 0; i < schedule.length; i++) {
+      const item = schedule[i];
+      console.log(`\n--- Processing item ${i + 1}/${schedule.length} ---`);
+      console.log('Item data:', JSON.stringify(item, null, 2));
+
+      // Require scheduled_at AND either a title or a film_id
+      if (!item.scheduled_at || (!item.title && !item.film_id)) {
+        console.warn('SKIPPING invalid item (missing required fields):', item);
+        continue;
+      }
+
+      // If we have a film_id but no title, look up the film's title
+      let title = item.title;
+      if (item.film_id && !title) {
+        const filmResult = await client.query('SELECT title FROM films WHERE id = $1', [item.film_id]);
+        if (filmResult.rows.length > 0) {
+          title = filmResult.rows[0].title;
+          console.log('Looked up film title:', title);
+        }
+      }
+
+      console.log('Executing INSERT query with values:', {
+        channel_id: channel.id,
+        film_id: item.film_id || null,
+        title: title || null,
+        scheduled_at: item.scheduled_at,
+        duration_seconds: item.duration_seconds || null
+      });
+
+      const insertResult = await client.query(
         `INSERT INTO channel_schedule
            (channel_id, film_id, title, scheduled_at, duration_seconds, status)
          VALUES ($1, $2, $3, $4, $5, 'scheduled')
@@ -709,18 +822,29 @@ export async function updateChannelSchedule(req: Request, res: Response): Promis
          DO UPDATE SET
            film_id = EXCLUDED.film_id,
            title = EXCLUDED.title,
-           duration_seconds = EXCLUDED.duration_seconds`,
-        [channel.id, item.film_id || null, item.title || null, item.scheduled_at, item.duration_seconds || null]
+           duration_seconds = EXCLUDED.duration_seconds
+         RETURNING id`,
+        [channel.id, item.film_id || null, title || null, item.scheduled_at, item.duration_seconds || null]
       );
+
+      console.log('Insert successful, returned id:', insertResult.rows[0]?.id);
+      insertedCount++;
     }
 
+    console.log(`\nAll ${insertedCount} items processed. Committing transaction...`);
     await client.query('COMMIT');
-    res.json({ success: true });
+    console.log('COMMIT successful!');
+    console.log(`=== SCHEDULE UPDATE COMPLETED: ${insertedCount} items saved ===\n`);
+
+    res.json({ success: true, count: insertedCount });
   } catch (error) {
+    console.log('\n!!! ERROR OCCURRED - ROLLING BACK !!!');
     await client.query('ROLLBACK');
-    console.error('Error updating schedule:', error);
-    res.status(500).json({ error: 'Failed to update schedule' });
+    console.error('Error details:', error);
+    console.log('=== SCHEDULE UPDATE FAILED ===\n');
+    res.status(500).json({ error: 'Failed to update schedule', details: error instanceof Error ? error.message : 'Unknown error' });
   } finally {
     client.release();
+    console.log('Database client released');
   }
 }

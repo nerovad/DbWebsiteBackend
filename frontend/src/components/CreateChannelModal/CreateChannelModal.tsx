@@ -28,7 +28,6 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, excludeClickId }
   // base channel
   const [channelNumber, setChannelNumber] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [channelInfo, setChannelInfo] = useState<any>(null);
@@ -129,7 +128,6 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, excludeClickId }
       const body: any = {
         name: generateInternalName(channelNumber), // AUTO-GENERATED
         display_name: displayName,
-        description: description || null,
         channel_number: parseInt(channelNumber),   // Include the number itself
         type: addEvent ? "festival" : "channel",
         widgets: selectedWidgets.length > 0 ? selectedWidgets : null,
@@ -170,7 +168,6 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, excludeClickId }
       // Reset form
       setChannelNumber("");
       setDisplayName("");
-      setDescription("");
       setAddEvent(false);
       setEventType("film_festival");
       setEventTitle("");
@@ -230,17 +227,6 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, excludeClickId }
               required
             />
             <small className="form-hint">{displayName.length}/20 characters</small>
-          </div>
-
-          <div className="row">
-            <label htmlFor="description">Description (optional)</label>
-            <textarea
-              id="description"
-              rows={3}
-              placeholder="Brief description of your channel..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
           </div>
 
           {/* Add Event Toggle */}
