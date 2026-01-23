@@ -1,53 +1,63 @@
 import React, { useEffect, useRef, useState } from "react";
-import { authHeaders } from "../../api/client";
-import TournamentSeeding, { TournamentBracket } from "./TournamentSeeding";
-import WidgetSelector from "../WidgetSelector/WidgetSelector";
 import "./CreateChannelModal.scss";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
+  onChannelCreated?: (channel: any) => void;
   excludeClickId?: string;
 }
 
-type EventType = "film_festival" | "battle_royal" | "tournament";
-
-type NewFilm = {
+type ScheduleItem = {
   title: string;
-  creator?: string;
-  duration?: string; // "07:42"
-  thumbnail?: string; // URL
+  scheduled_at: string;
+  duration: string; // Timecode format: HH:MM:SS or MM:SS
 };
 
-const emptyFilm: NewFilm = { title: "", creator: "", duration: "", thumbnail: "" };
+type WidgetConfig = {
+  type: string;
+  order: number;
+};
 
-const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, excludeClickId }) => {
+const emptyScheduleItem: ScheduleItem = { title: "", scheduled_at: "", duration: "" };
+
+// Convert timecode (HH:MM:SS or MM:SS) to seconds
+const timecodeToSeconds = (timecode: string): number | null => {
+  if (!timecode || !timecode.trim()) return null;
+  const parts = timecode.split(':').map(p => parseInt(p, 10));
+  if (parts.some(isNaN)) return null;
+
+  if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  } else if (parts.length === 2) {
+    return parts[0] * 60 + parts[1];
+  }
+  return null;
+};
+
+// General widgets available for all channels
+const GENERAL_WIDGETS = [
+  { type: 'about', name: 'About', description: 'Channel info and description', icon: 'ℹ️' },
+  { type: 'now_playing', name: 'Now Playing / Up Next', description: 'Current and upcoming content', icon: '📺' },
+];
+
+const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, onChannelCreated, excludeClickId }) => {
   const boxRef = useRef<HTMLDivElement>(null);
   const firstFieldRef = useRef<HTMLSelectElement>(null);
 
-  // base channel
+  // Channel fields
   const [channelNumber, setChannelNumber] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [channelInfo, setChannelInfo] = useState<any>(null);
 
-  // event/festival
-  const [addEvent, setAddEvent] = useState(false);
-  const [eventType, setEventType] = useState<EventType>("film_festival");
-  const [eventTitle, setEventTitle] = useState("");
-  const [startsAt, setStartsAt] = useState<string>(""); // ISO datetime-local
-  const [endsAt, setEndsAt] = useState<string>("");
-
-  // films
-  const [films, setFilms] = useState<NewFilm[]>([{ ...emptyFilm }]);
-
-  // Tournament
-  const [tournamentBracket, setTournamentBracket] = useState<TournamentBracket | null>(null);
-
   // Widgets
-  const [selectedWidgets, setSelectedWidgets] = useState<Array<{type: string, order: number}>>([]);
+  const [selectedWidgets, setSelectedWidgets] = useState<WidgetConfig[]>([]);
   const [aboutText, setAboutText] = useState("");
+
+  // Schedule for Now Playing widget
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
 
   // Track taken channel numbers
   const [takenChannelNumbers, setTakenChannelNumbers] = useState<Set<number>>(new Set());
@@ -121,35 +131,29 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, excludeClickId }
   }, [isOpen, onClose]);
 
   const canSubmit = () => {
-    if (!channelNumber || !displayName.trim()) return false;
-    if (!addEvent) return true;
-    if (!eventTitle.trim()) return false;
-    if (!startsAt || !endsAt) return false;
-    if (new Date(startsAt) >= new Date(endsAt)) return false;
-    const validFilms = films.filter(f => f.title.trim().length > 0);
-    if (validFilms.length === 0) return false;
-
-    // ✅ For tournaments, require bracket to be set up
-    if (eventType === "tournament" && !tournamentBracket) return false;
-
-    return true;
+    return channelNumber && displayName.trim();
   };
 
-  const addFilmRow = () => setFilms(prev => [...prev, { ...emptyFilm }]);
-  const removeFilmRow = (idx: number) => setFilms(prev => prev.filter((_, i) => i !== idx));
-  const updateFilm = (idx: number, patch: Partial<NewFilm>) =>
-    setFilms(prev => prev.map((f, i) => (i === idx ? { ...f, ...patch } : f)));
-
-  const normalizeFilms = (): NewFilm[] => {
-    return films
-      .map(f => ({
-        title: f.title.trim(),
-        creator: f.creator?.trim() || undefined,
-        duration: f.duration?.trim() || undefined,
-        thumbnail: f.thumbnail?.trim() || undefined,
-      }))
-      .filter(f => f.title.length > 0);
+  // Widget helpers
+  const toggleWidget = (widgetType: string) => {
+    const exists = selectedWidgets.find(w => w.type === widgetType);
+    if (exists) {
+      setSelectedWidgets(selectedWidgets.filter(w => w.type !== widgetType));
+    } else {
+      const maxOrder = Math.max(...selectedWidgets.map(w => w.order), -1);
+      setSelectedWidgets([...selectedWidgets, { type: widgetType, order: maxOrder + 1 }]);
+    }
   };
+
+  const isWidgetSelected = (widgetType: string) => {
+    return selectedWidgets.some(w => w.type === widgetType);
+  };
+
+  // Schedule helpers
+  const addScheduleRow = () => setScheduleItems(prev => [...prev, { ...emptyScheduleItem }]);
+  const removeScheduleRow = (idx: number) => setScheduleItems(prev => prev.filter((_, i) => i !== idx));
+  const updateScheduleItem = (idx: number, patch: Partial<ScheduleItem>) =>
+    setScheduleItems(prev => prev.map((item, i) => (i === idx ? { ...item, ...patch } : item)));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -157,26 +161,24 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, excludeClickId }
 
     setSubmitting(true);
     try {
+      // Normalize schedule items for submission
+      const normalizedSchedule = scheduleItems
+        .filter(item => item.title.trim() && item.scheduled_at)
+        .map(item => ({
+          title: item.title.trim(),
+          scheduled_at: new Date(item.scheduled_at).toISOString(),
+          duration_seconds: timecodeToSeconds(item.duration),
+        }));
+
       const body: any = {
-        name: generateInternalName(channelNumber), // AUTO-GENERATED
+        name: generateInternalName(channelNumber),
         display_name: displayName,
-        channel_number: parseInt(channelNumber),   // Include the number itself
-        type: addEvent ? "festival" : "channel",
+        channel_number: parseInt(channelNumber),
+        type: "channel",
         widgets: selectedWidgets.length > 0 ? selectedWidgets : null,
         about_text: aboutText || null,
+        schedule: normalizedSchedule.length > 0 ? normalizedSchedule : null,
       };
-
-      if (addEvent) {
-        body.event = {
-          kind: eventType,
-          title: eventTitle,
-          starts_at: new Date(startsAt).toISOString(),
-          ends_at: new Date(endsAt).toISOString(),
-          // ✅ voting_mode and require_login are now auto-determined by backend!
-          tournament_bracket: eventType === "tournament" ? tournamentBracket : null,
-        };
-        body.films = normalizeFilms();
-      }
 
       const token = localStorage.getItem("token");
       const res = await fetch("/api/channels", {
@@ -200,16 +202,15 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, excludeClickId }
       // Reset form
       setChannelNumber("");
       setDisplayName("");
-      setAddEvent(false);
-      setEventType("film_festival");
-      setEventTitle("");
-      setStartsAt("");
-      setEndsAt("");
-      setFilms([{ ...emptyFilm }]);
-      setTournamentBracket(null);
       setSelectedWidgets([]);
       setAboutText("");
+      setScheduleItems([]);
       setSuccess(true);
+
+      // Notify parent
+      if (onChannelCreated) {
+        onChannelCreated(data);
+      }
     } catch (err) {
       console.error("Error submitting channel", err);
     } finally {
@@ -227,7 +228,7 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, excludeClickId }
         <h2 id="create-channel-title">Create Channel</h2>
 
         <form className="create-channel-form" onSubmit={handleSubmit}>
-          {/* UPDATED: Channel Number Dropdown */}
+          {/* Channel Number Dropdown */}
           <div className="row">
             <label htmlFor="channel-number">Channel Number</label>
             <select
@@ -254,7 +255,7 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, excludeClickId }
             )}
           </div>
 
-          {/* UPDATED: Display Name with character limit */}
+          {/* Display Name */}
           <div className="row">
             <label htmlFor="display-name">Channel Display Name</label>
             <input
@@ -269,151 +270,108 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, excludeClickId }
             <small className="form-hint">{displayName.length}/20 characters</small>
           </div>
 
-          {/* Add Event Toggle */}
-          <button
-            type="button"
-            className={`toggle-btn ${addEvent ? "active" : ""}`}
-            onClick={() => setAddEvent(!addEvent)}
-          >
-            {addEvent ? "✓ Event Added" : "+ Add Event"}
-          </button>
+          {/* Widget Selector - General widgets only */}
+          <div className="widget-selector">
+            <h4>Channel Widgets</h4>
+            <p className="help-text">Select which widgets to display in your channel menu.</p>
 
-          {addEvent && (
-            <div className="festival-block">
-              {/* Event Type */}
-              <div className="row">
-                <label htmlFor="event-type">Event Type</label>
-                <select
-                  id="event-type"
-                  value={eventType}
-                  onChange={(e) => setEventType(e.target.value as EventType)}
+            <div className="widget-grid">
+              {GENERAL_WIDGETS.map(widget => (
+                <label
+                  key={widget.type}
+                  className={`widget-option ${isWidgetSelected(widget.type) ? 'selected' : ''}`}
                 >
-                  <option value="film_festival">Film Festival (Ratings 1-10)</option>
-                  <option value="battle_royal">Battle Royale (Head-to-Head)</option>
-                  <option value="tournament">Tournament (Bracket)</option>
-                </select>
-                <small className="form-hint">
-                  Voting mode is automatically set based on event type. Login always required.
-                </small>
-              </div>
-
-              {/* Widget Selector */}
-              <WidgetSelector
-                eventType={eventType}
-                selectedWidgets={selectedWidgets}
-                onChange={setSelectedWidgets}
-              />
-
-              {/* About widget textarea (conditional) */}
-              {selectedWidgets.some(w => w.type === 'about') && (
-                <div className="row">
-                  <label htmlFor="about-text">About Text (Markdown supported)</label>
-                  <textarea
-                    id="about-text"
-                    value={aboutText}
-                    onChange={(e) => setAboutText(e.target.value)}
-                    placeholder="Describe your channel... You can use **bold**, _italic_, and [links](https://example.com)"
-                    rows={6}
-                  />
-                </div>
-              )}
-
-              <div className="row">
-                <label htmlFor="event-name">Event Name</label>
-                <input
-                  id="event-name"
-                  type="text"
-                  placeholder="e.g. DBTV Summer Shorts 2025"
-                  value={eventTitle}
-                  onChange={(e) => setEventTitle(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="row cols-2">
-                <div>
-                  <label htmlFor="starts-at">Starts</label>
                   <input
-                    id="starts-at"
-                    type="datetime-local"
-                    value={startsAt}
-                    onChange={(e) => setStartsAt(e.target.value)}
-                    required
+                    type="checkbox"
+                    checked={isWidgetSelected(widget.type)}
+                    onChange={() => toggleWidget(widget.type)}
                   />
-                </div>
-                <div>
-                  <label htmlFor="ends-at">Ends</label>
-                  <input
-                    id="ends-at"
-                    type="datetime-local"
-                    value={endsAt}
-                    onChange={(e) => setEndsAt(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="films-header">
-                <h4>Films in this event</h4>
-                <button type="button" className="btn-secondary small" onClick={addFilmRow}>+ Add Film</button>
-              </div>
-
-              <div className="films-table">
-                {films.map((f, idx) => (
-                  <div key={idx} className="film-row">
-                    <input
-                      type="text"
-                      placeholder="Title *"
-                      value={f.title}
-                      onChange={(e) => updateFilm(idx, { title: e.target.value })}
-                      required
-                    />
-                    <input
-                      type="text"
-                      placeholder="Creator (optional)"
-                      value={f.creator || ""}
-                      onChange={(e) => updateFilm(idx, { creator: e.target.value })}
-                    />
-                    <input
-                      type="text"
-                      placeholder="Duration (e.g. 07:42)"
-                      value={f.duration || ""}
-                      onChange={(e) => updateFilm(idx, { duration: e.target.value })}
-                    />
-                    <input
-                      type="url"
-                      placeholder="Thumbnail URL (optional)"
-                      value={f.thumbnail || ""}
-                      onChange={(e) => updateFilm(idx, { thumbnail: e.target.value })}
-                    />
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      aria-label="Remove film"
-                      onClick={() => removeFilmRow(idx)}
-                      disabled={films.length === 1}
-                    >
-                      ✕
-                    </button>
+                  <div className="widget-card">
+                    <span className="widget-icon">{widget.icon}</span>
+                    <div className="widget-info">
+                      <strong>{widget.name}</strong>
+                      <p>{widget.description}</p>
+                    </div>
                   </div>
-                ))}
+                </label>
+              ))}
+            </div>
+
+            <p className="help-text event-hint">
+              Event widgets (Voting, Leaderboard, Bracket) are automatically added when you create an event.
+            </p>
+          </div>
+
+          {/* About widget textarea (conditional) */}
+          {isWidgetSelected('about') && (
+            <div className="row">
+              <label htmlFor="about-text">About Text (Markdown supported)</label>
+              <textarea
+                id="about-text"
+                value={aboutText}
+                onChange={(e) => setAboutText(e.target.value)}
+                placeholder="Describe your channel... You can use **bold**, _italic_, and [links](https://example.com)"
+                rows={6}
+              />
+            </div>
+          )}
+
+          {/* Now Playing schedule editor (conditional) */}
+          {isWidgetSelected('now_playing') && (
+            <div className="schedule-editor">
+              <div className="schedule-header">
+                <h4>Now Playing / Up Next Schedule</h4>
+                <button type="button" className="btn-secondary small" onClick={addScheduleRow}>
+                  + Add Time Slot
+                </button>
               </div>
 
-              {/* ✅ TOURNAMENT SEEDING - Properly placed after films section */}
-              {eventType === "tournament" && films.filter(f => f.title.trim()).length > 0 && (
-                <div className="tournament-section">
-                  <TournamentSeeding
-                    films={films.filter(f => f.title.trim()).map((f, idx) => ({
-                      id: `temp-${idx}`, // Temporary ID for frontend
-                      title: f.title,
-                      creator: f.creator,
-                      thumbnail: f.thumbnail,
-                    }))}
-                    onSeedingComplete={(bracket) => {
-                      console.log("Bracket setup complete:", bracket);
-                      setTournamentBracket(bracket);
-                    }}
-                  />
+              {scheduleItems.length === 0 ? (
+                <p className="schedule-hint">
+                  Add time slots to show what's playing and coming up next on your channel.
+                </p>
+              ) : (
+                <div className="schedule-table">
+                  {scheduleItems.map((item, idx) => (
+                    <div key={idx} className="schedule-row">
+                      <div className="schedule-field">
+                        <label>Program Title</label>
+                        <input
+                          type="text"
+                          placeholder="e.g., Movie Night"
+                          value={item.title}
+                          onChange={(e) => updateScheduleItem(idx, { title: e.target.value })}
+                        />
+                      </div>
+                      <div className="schedule-field">
+                        <label>Air Date & Time</label>
+                        <input
+                          type="datetime-local"
+                          value={item.scheduled_at}
+                          onChange={(e) => updateScheduleItem(idx, { scheduled_at: e.target.value })}
+                        />
+                      </div>
+                      <div className="schedule-field duration-field">
+                        <label>Duration</label>
+                        <input
+                          type="text"
+                          placeholder="HH:MM:SS"
+                          value={item.duration}
+                          onChange={(e) => updateScheduleItem(idx, { duration: e.target.value })}
+                          pattern="^(\d{1,2}:)?\d{1,2}:\d{2}$"
+                          title="Format: HH:MM:SS or MM:SS"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        aria-label="Remove time slot"
+                        onClick={() => removeScheduleRow(idx)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -424,7 +382,7 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, excludeClickId }
           </button>
         </form>
 
-        {success && <p className="create-channel-message">✅ Channel created successfully!</p>}
+        {success && <p className="create-channel-message">Channel created successfully!</p>}
 
         {channelInfo && (
           <div className="channel-details">

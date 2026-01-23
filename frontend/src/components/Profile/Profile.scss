@@ -160,6 +160,34 @@
       background: transparent;
       &:hover { background: rgba($primary-color, .1); }
     }
+
+    &.btn-event {
+      border-color: $secondary-color;
+      color: $secondary-color;
+      background: transparent;
+      &:hover {
+        background: rgba($secondary-color, .15);
+        box-shadow: 0 4px 12px rgba($secondary-color, .2);
+      }
+    }
+
+    &.btn-manager {
+      border-color: #9c27b0;
+      color: #9c27b0;
+      &:hover {
+        background: rgba(#9c27b0, .15);
+      }
+    }
+
+    &.danger {
+      border-color: #ff4d4d;
+      color: #ff4d4d;
+      background: transparent;
+      &:hover {
+        background: rgba(#ff4d4d, .15);
+        box-shadow: 0 4px 12px rgba(#ff4d4d, .2);
+      }
+    }
   }
 
     .stats-row {

@@ -4,6 +4,7 @@ import AvatarPicker from "./AvatarPicker";
 import CreateChannelModal from "../CreateChannelModal/CreateChannelModal";
 import Messages from "./Messages";
 import EditChannelModal from "../EditChannelModal/EditChannelModal";
+import EventModal from "../EventModal/EventModal";
 import TournamentConsole from "./TournamentConsole";
 import { useApi } from "../../utils/useApi";
 import Logo from "../../assets/cinezoo_logo_neon_7.svg";
@@ -108,6 +109,9 @@ const Profile: React.FC = () => {
 
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null);
   const [deletingChannelId, setDeletingChannelId] = useState<string | null>(null);
+
+  // Event modal state
+  const [addingEventToChannel, setAddingEventToChannel] = useState<Channel | null>(null);
 
   // Tournament Console modal state
   const [tournamentConsoleChannel, setTournamentConsoleChannel] = useState<Channel | null>(null);
@@ -422,7 +426,6 @@ const Profile: React.FC = () => {
                       </div>
                       {ch.description && <p className="card-desc">{ch.description}</p>}
                       <div className="card-actions">
-
                         <a className="btn ghost"
                           href={ch.slug ? `/channel/${ch.slug}` : `/channel/${ch.id}`}
                         >
@@ -433,6 +436,12 @@ const Profile: React.FC = () => {
                           onClick={() => setEditingChannel(ch)}
                         >
                           Edit
+                        </button>
+                        <button
+                          className="btn btn-event"
+                          onClick={() => setAddingEventToChannel(ch)}
+                        >
+                          Add Event
                         </button>
 
                         {/* Manager button - opens modal instead of navigating */}
@@ -540,6 +549,24 @@ const Profile: React.FC = () => {
         onClose={() => setShowAvatarPicker(false)}
         onSelect={handleAvatarSelect}
         currentAvatar={profile.avatarUrl}
+      />
+
+      <EventModal
+        isOpen={!!addingEventToChannel}
+        onClose={() => setAddingEventToChannel(null)}
+        channel={addingEventToChannel}
+        onEventCreated={(event) => {
+          // Refresh channel data to show new event
+          console.log("Event created:", event);
+          // Optionally update the channel in state to reflect the new event
+          if (addingEventToChannel) {
+            setChannels(prev => prev.map(ch =>
+              ch.id === addingEventToChannel.id
+                ? { ...ch, event_type: event.kind, session_id: event.id }
+                : ch
+            ));
+          }
+        }}
       />
 
       {/* Tournament Console Modal */}

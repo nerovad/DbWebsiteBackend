@@ -568,6 +568,12 @@
       input[type="number"] {
         width: 100%;
       }
+
+      &.duration-field input {
+        font-family: monospace;
+        text-align: center;
+        letter-spacing: 1px;
+      }
     }
 
     .icon-btn {

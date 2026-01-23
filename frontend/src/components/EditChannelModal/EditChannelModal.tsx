@@ -59,6 +59,32 @@ const emptyScheduleItem: ScheduleItem = {
   duration_seconds: null,
 };
 
+// Convert seconds to timecode (HH:MM:SS)
+const secondsToTimecode = (seconds: number | null | undefined): string => {
+  if (!seconds) return "";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) {
+    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+  return `${m}:${s.toString().padStart(2, '0')}`;
+};
+
+// Convert timecode (HH:MM:SS or MM:SS) to seconds
+const timecodeToSeconds = (timecode: string): number | null => {
+  if (!timecode || !timecode.trim()) return null;
+  const parts = timecode.split(':').map(p => parseInt(p, 10));
+  if (parts.some(isNaN)) return null;
+
+  if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  } else if (parts.length === 2) {
+    return parts[0] * 60 + parts[1];
+  }
+  return null;
+};
+
 const EditChannelModal: React.FC<Props> = ({ isOpen, onClose, channel, onUpdate }) => {
   const boxRef = useRef<HTMLDivElement>(null);
 
@@ -383,6 +409,7 @@ const EditChannelModal: React.FC<Props> = ({ isOpen, onClose, channel, onUpdate 
           </div>
           <WidgetSelector
             eventType="film_festival"
+            addEvent={existingSessions.length > 0 || addEvent}
             selectedWidgets={selectedWidgets}
             onChange={setSelectedWidgets}
           />
@@ -446,7 +473,7 @@ const EditChannelModal: React.FC<Props> = ({ isOpen, onClose, channel, onUpdate 
                         </div>
 
                         <div className="schedule-field">
-                          <label>Scheduled Time</label>
+                          <label>Air Date & Time</label>
                           <input
                             type="datetime-local"
                             value={item.scheduled_at}
@@ -454,15 +481,17 @@ const EditChannelModal: React.FC<Props> = ({ isOpen, onClose, channel, onUpdate 
                           />
                         </div>
 
-                        <div className="schedule-field">
-                          <label>Duration (seconds)</label>
+                        <div className="schedule-field duration-field">
+                          <label>Duration</label>
                           <input
-                            type="number"
-                            placeholder="e.g., 420"
-                            value={item.duration_seconds || ""}
+                            type="text"
+                            placeholder="HH:MM:SS"
+                            value={secondsToTimecode(item.duration_seconds)}
                             onChange={(e) => updateScheduleItem(idx, {
-                              duration_seconds: e.target.value ? parseInt(e.target.value) : null
+                              duration_seconds: timecodeToSeconds(e.target.value)
                             })}
+                            pattern="^(\d{1,2}:)?\d{1,2}:\d{2}$"
+                            title="Format: HH:MM:SS or MM:SS"
                           />
                         </div>
 
