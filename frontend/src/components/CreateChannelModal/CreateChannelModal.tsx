@@ -49,13 +49,45 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, excludeClickId }
   const [selectedWidgets, setSelectedWidgets] = useState<Array<{type: string, order: number}>>([]);
   const [aboutText, setAboutText] = useState("");
 
-  // Generate available channel numbers (e.g., 2-99)
-  const availableChannels = Array.from({ length: 199 }, (_, i) => i + 2);
+  // Track taken channel numbers
+  const [takenChannelNumbers, setTakenChannelNumbers] = useState<Set<number>>(new Set());
+  const [loadingChannels, setLoadingChannels] = useState(false);
+
+  // Generate available channel numbers (2-200), excluding taken ones
+  const availableChannels = Array.from({ length: 199 }, (_, i) => i + 2)
+    .filter(num => !takenChannelNumbers.has(num));
 
   // Auto-generate internal name from channel number
   const generateInternalName = (num: string): string => {
     return num ? `channel_${num}` : "";
   };
+
+  // Fetch existing channels to determine taken channel numbers
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const fetchTakenChannels = async () => {
+      setLoadingChannels(true);
+      try {
+        const res = await fetch("/api/channels");
+        if (res.ok) {
+          const channels = await res.json();
+          const taken = new Set<number>(
+            channels
+              .map((ch: any) => ch.channel_number)
+              .filter((num: any) => typeof num === 'number')
+          );
+          setTakenChannelNumbers(taken);
+        }
+      } catch (err) {
+        console.error("Failed to fetch channels:", err);
+      } finally {
+        setLoadingChannels(false);
+      }
+    };
+
+    fetchTakenChannels();
+  }, [isOpen]);
 
   // Close on outside click
   useEffect(() => {
@@ -204,14 +236,22 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, excludeClickId }
               value={channelNumber}
               onChange={(e) => setChannelNumber(e.target.value)}
               required
+              disabled={loadingChannels}
             >
-              <option value="">Select a channel number...</option>
+              <option value="">
+                {loadingChannels ? "Loading available channels..." : "Select a channel number..."}
+              </option>
               {availableChannels.map(num => (
                 <option key={num} value={num}>
                   Channel {num}
                 </option>
               ))}
             </select>
+            {!loadingChannels && availableChannels.length === 0 && (
+              <small className="form-hint" style={{ color: '#ff6b6b' }}>
+                All channel numbers are taken.
+              </small>
+            )}
           </div>
 
           {/* UPDATED: Display Name with character limit */}
