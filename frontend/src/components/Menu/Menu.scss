@@ -120,6 +120,11 @@ $lava-purple-accent: rgba(lighten($primary-color, 15%), 0.3);
     &:hover {
       background: $secondary-color;
       transform: scale(1.05);
+
+      p {
+        color: #000;
+        font-weight: 600;
+      }
     }
 
     strong {
@@ -131,6 +136,7 @@ $lava-purple-accent: rgba(lighten($primary-color, 15%), 0.3);
       font-size: 0.75rem;
       color: #ddd;
       margin-top: 2px;
+      transition: color 0.2s ease-in-out, font-weight 0.2s ease-in-out;
     }
   }
 }

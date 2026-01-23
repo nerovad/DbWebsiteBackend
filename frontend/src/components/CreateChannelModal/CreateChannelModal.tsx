@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { authHeaders } from "../../api/client";
 import TournamentSeeding, { TournamentBracket } from "./TournamentSeeding";
+import WidgetSelector from "../WidgetSelector/WidgetSelector";
 import "./CreateChannelModal.scss";
 
 interface Props {
@@ -44,6 +45,10 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, excludeClickId }
 
   // Tournament
   const [tournamentBracket, setTournamentBracket] = useState<TournamentBracket | null>(null);
+
+  // Widgets
+  const [selectedWidgets, setSelectedWidgets] = useState<Array<{type: string, order: number}>>([]);
+  const [aboutText, setAboutText] = useState("");
 
   // Generate available channel numbers (e.g., 2-99)
   const availableChannels = Array.from({ length: 199 }, (_, i) => i + 2);
@@ -127,6 +132,8 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, excludeClickId }
         description: description || null,
         channel_number: parseInt(channelNumber),   // Include the number itself
         type: addEvent ? "festival" : "channel",
+        widgets: selectedWidgets.length > 0 ? selectedWidgets : null,
+        about_text: aboutText || null,
       };
 
       if (addEvent) {
@@ -171,6 +178,8 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, excludeClickId }
       setEndsAt("");
       setFilms([{ ...emptyFilm }]);
       setTournamentBracket(null);
+      setSelectedWidgets([]);
+      setAboutText("");
       setSuccess(true);
     } catch (err) {
       console.error("Error submitting channel", err);
@@ -261,6 +270,27 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, excludeClickId }
                   Voting mode is automatically set based on event type. Login always required.
                 </small>
               </div>
+
+              {/* Widget Selector */}
+              <WidgetSelector
+                eventType={eventType}
+                selectedWidgets={selectedWidgets}
+                onChange={setSelectedWidgets}
+              />
+
+              {/* About widget textarea (conditional) */}
+              {selectedWidgets.some(w => w.type === 'about') && (
+                <div className="row">
+                  <label htmlFor="about-text">About Text (Markdown supported)</label>
+                  <textarea
+                    id="about-text"
+                    value={aboutText}
+                    onChange={(e) => setAboutText(e.target.value)}
+                    placeholder="Describe your channel... You can use **bold**, _italic_, and [links](https://example.com)"
+                    rows={6}
+                  />
+                </div>
+              )}
 
               <div className="row">
                 <label htmlFor="event-name">Event Name</label>

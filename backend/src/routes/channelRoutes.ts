@@ -6,9 +6,11 @@ import {
   getChannel,
   updateChannel,
   deleteChannel,
+  getMyChannels,
+  getChannelSchedule,
+  updateChannelSchedule,
 } from "../controllers/channelController";
 import { listFilmsForChannel } from "../controllers/filmController";
-import { getMyChannels } from "../controllers/channelController";
 import { authenticateToken, AuthRequest } from "../middleware/authMiddleware";
 
 const router = express.Router();
@@ -45,6 +47,16 @@ router.get("/:channelId(\\d+)/films", (req: Request, res: Response, next: NextFu
 
 router.get("/:slug/films", (req: Request, res: Response, next: NextFunction) => {
   listFilmsForChannel(req, res, next);
+});
+
+// GET /api/channels/:slug/schedule - Get channel schedule
+router.get("/:slug/schedule", (req: Request, res: Response) => {
+  getChannelSchedule(req, res);
+});
+
+// POST /api/channels/:slug/schedule - Create/update schedule items
+router.post("/:slug/schedule", (req: Request, res: Response) => {
+  updateChannelSchedule(req, res);
 });
 
 // GET /api/channels/:slug (get single channel by slug)

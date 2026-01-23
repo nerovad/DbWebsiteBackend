@@ -3,6 +3,8 @@ import "./Menu.scss";
 import RewindIcon from "../../assets/rewind_icon.svg";
 import { useChatStore } from "../../store/useChatStore";
 import TournamentBracket from "./TournamentBracket";
+import AboutWidget from "./AboutWidget";
+import NowPlayingWidget from "./NowPlayingWidget";
 
 /* === PROPS === */
 interface UtilitiesProps {
@@ -11,7 +13,7 @@ interface UtilitiesProps {
 }
 
 /* === TYPES === */
-type ModalKind = null | "ballot" | "battle" | "bracket" | "leaderboard";
+type ModalKind = null | "ballot" | "battle" | "bracket" | "leaderboard" | "about" | "now_playing";
 
 type Film = {
   id: string;
@@ -260,17 +262,42 @@ const Utilities: React.FC<UtilitiesProps> = ({ isOpen, setIsOpen }) => {
   const [films, setFilms] = useState<Film[]>([]);
   const [idx, setIdx] = useState(0);
   const [eventType, setEventType] = useState<string | null>(null);
+  const [channelWidgets, setChannelWidgets] = useState<Array<{type: string, order: number}>>([]);
+  const [channelData, setChannelData] = useState<any>(null);
 
   useEffect(() => {
     if (activeModal === "ballot") setView("grid");
   }, [activeModal]);
 
-  // fetch channel metadata including event type
+  // Helper function for legacy channels
+  const deriveWidgetsFromEventType = (eventType: string): Array<{type: string, order: number}> => {
+    switch (eventType?.toLowerCase()) {
+      case 'film festival':
+      case 'film_festival':
+        return [
+          { type: 'voting_ballot', order: 0 },
+          { type: 'leaderboard', order: 1 }
+        ];
+      case 'battle royal':
+      case 'battle_royal':
+      case 'battle royale':
+      case 'battle_royale':
+        return [{ type: 'battle_royale', order: 0 }];
+      case 'tournament':
+        return [{ type: 'tournament_bracket', order: 0 }];
+      default:
+        return [];
+    }
+  };
+
+  // fetch channel metadata including widgets
   useEffect(() => {
     let on = true;
     (async () => {
       if (!channelId) {
         setEventType(null);
+        setChannelWidgets([]);
+        setChannelData(null);
         return;
       }
       try {
@@ -278,11 +305,27 @@ const Utilities: React.FC<UtilitiesProps> = ({ isOpen, setIsOpen }) => {
         if (!res.ok) throw new Error("Failed to load channel");
         const data = await res.json();
         if (on) {
-          setEventType(data.event_type || null);
+          setChannelData(data);
+
+          // Use widgets if available, otherwise fallback to event_type (legacy)
+          if (data.widgets && data.widgets.length > 0) {
+            setChannelWidgets(data.widgets.sort((a: any, b: any) => a.order - b.order));
+          } else if (data.latestSession?.event_type) {
+            // Legacy fallback
+            setChannelWidgets(deriveWidgetsFromEventType(data.latestSession.event_type));
+          } else {
+            setChannelWidgets([]);
+          }
+
+          setEventType(data.latestSession?.event_type || null);
         }
       } catch (e) {
         console.error(e);
-        if (on) setEventType(null);
+        if (on) {
+          setEventType(null);
+          setChannelWidgets([]);
+          setChannelData(null);
+        }
       }
     })();
     return () => {
@@ -338,36 +381,46 @@ const Utilities: React.FC<UtilitiesProps> = ({ isOpen, setIsOpen }) => {
   const currentFilm: Film | null = films.length ? films[idx % films.length] : null;
   const [view, setView] = useState<"single" | "grid">("single");
 
-  // All possible utilities
-  const allUtilities = [
-    { key: "ballot" as const, name: "Voting Ballot", description: "Rate and support your favorite entries." },
-    { key: "battle" as const, name: "Battle Royale", description: "Films go head-to-head. You decide the winner." },
-    { key: "bracket" as const, name: "Tournament Bracket", description: "See who's advancing in the competition." },
-    { key: "leaderboard" as const, name: "Leaderboard", description: "Top-ranked filmmakers." },
-  ];
-
-  // Filter utilities based on event type
-  const utilities = useMemo(() => {
-    if (!eventType) return []; // Show nothing if no event type
-
-    switch (eventType.toLowerCase()) {
-      case "film festival":
-      case "film_festival":
-        return allUtilities.filter(u => u.key === "ballot" || u.key === "leaderboard");
-
-      case "battle royal":
-      case "battle_royal":
-      case "battle royale":
-      case "battle_royale":
-        return allUtilities.filter(u => u.key === "battle");
-
-      case "tournament":
-        return allUtilities.filter(u => u.key === "bracket");
-
-      default:
-        return []; // Show nothing for unknown event types
+  // Define widget type map
+  const WIDGET_MAP: Record<string, {key: ModalKind, name: string, description: string}> = {
+    voting_ballot: {
+      key: "ballot",
+      name: "Voting Ballot",
+      description: "Rate and support your favorite entries."
+    },
+    leaderboard: {
+      key: "leaderboard",
+      name: "Leaderboard",
+      description: "Top-ranked filmmakers."
+    },
+    battle_royale: {
+      key: "battle",
+      name: "Battle Royale",
+      description: "Films go head-to-head. You decide the winner."
+    },
+    tournament_bracket: {
+      key: "bracket",
+      name: "Tournament Bracket",
+      description: "See who's advancing in the competition."
+    },
+    about: {
+      key: "about",
+      name: "About",
+      description: "Learn about this channel."
+    },
+    now_playing: {
+      key: "now_playing",
+      name: "Now Playing",
+      description: "See what's on right now."
     }
-  }, [eventType]);
+  };
+
+  // Render widgets based on channel config
+  const utilities = useMemo(() => {
+    return channelWidgets
+      .map(w => WIDGET_MAP[w.type])
+      .filter(Boolean);
+  }, [channelWidgets]);
 
   const submitVote = async (payload: BallotSubmit) => {
     if (!channelId) return;
@@ -499,6 +552,26 @@ const Utilities: React.FC<UtilitiesProps> = ({ isOpen, setIsOpen }) => {
             />
           )}
         </div>
+      </Modal>
+
+      {/* About Widget Modal */}
+      <Modal
+        isOpen={activeModal === "about"}
+        onClose={() => setActiveModal(null)}
+        title="ℹ️ About This Channel"
+        width={680}
+      >
+        <AboutWidget channelId={channelId || ""} />
+      </Modal>
+
+      {/* Now Playing Widget Modal */}
+      <Modal
+        isOpen={activeModal === "now_playing"}
+        onClose={() => setActiveModal(null)}
+        title="📺 Now Playing / Up Next"
+        width={780}
+      >
+        <NowPlayingWidget channelId={channelId || ""} />
       </Modal>
     </>
   );

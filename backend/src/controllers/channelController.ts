@@ -67,6 +67,10 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       type, // "channel" | "festival" (unused for channel insert; accepted for completeness)
       event, // { kind, title, starts_at, ends_at, tournament_bracket }
       films, // [{ title, creator?, duration?, thumbnail?, id? }]
+      // NEW: Widget system fields
+      widgets, // [{ type, order, config? }]
+      about_text, // Markdown text for About widget
+      first_live_at, // When channel first went live
     } = req.body as {
       name: string;
       slug?: string;
@@ -88,6 +92,13 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
         thumbnail?: string;
         id?: string; // film ID for tournament seeding
       }>;
+      widgets?: Array<{
+        type: string;
+        order: number;
+        config?: any;
+      }>;
+      about_text?: string;
+      first_live_at?: string | null;
     };
 
     if (!name && !slug) {
@@ -122,10 +133,16 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       // Update name/stream_url only; preserve keys/paths
       const upd = await client.query(
         `update channels
-         set name = $2, stream_url = $3, display_name = $4, channel_number = $5
+         set name = $2, stream_url = $3, display_name = $4, channel_number = $5,
+             widgets = COALESCE($6, widgets),
+             about_text = COALESCE($7, about_text),
+             first_live_at = COALESCE($8, first_live_at)
          where id = $1
-         returning id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, created_at`,
-        [row.id, name ?? row.name, stream_url ?? row.stream_url, display_name ?? row.display_name, channel_number ?? row.channel_number]
+         returning id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, widgets, about_text, first_live_at, created_at`,
+        [row.id, name ?? row.name, stream_url ?? row.stream_url, display_name ?? row.display_name, channel_number ?? row.channel_number,
+         widgets ? JSON.stringify(widgets) : null,
+         about_text ?? null,
+         first_live_at ?? null]
       );
       channel = upd.rows[0];
     } else {
@@ -136,10 +153,13 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
 
       const chResult = await client.query(
         `insert into channels
-           (owner_id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, created_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9, now())
-         returning id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, created_at`,
-        [uid, slug, name ?? slug, stream_url ?? null, streamKey, ingestApp, playbackPath, display_name ?? null, channel_number ?? null]
+           (owner_id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, widgets, about_text, first_live_at, created_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, now())
+         returning id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, widgets, about_text, first_live_at, created_at`,
+        [uid, slug, name ?? slug, stream_url ?? null, streamKey, ingestApp, playbackPath, display_name ?? null, channel_number ?? null,
+         widgets ? JSON.stringify(widgets) : null,
+         about_text ?? null,
+         first_live_at ?? null]
       );
       channel = chResult.rows[0];
     }
@@ -324,8 +344,12 @@ export async function getChannel(req: Request, res: Response, next: NextFunction
   try {
     const slug = String(req.params.slug);
     const { rows } = await pool.query(
-      `select id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, created_at
-       from channels where slug = $1 limit 1`,
+      `select c.id, c.slug, c.name, c.stream_url, c.stream_key, c.ingest_app, c.playback_path,
+              c.display_name, c.channel_number, c.widgets, c.about_text, c.first_live_at, c.created_at,
+              u.username as owner_name
+       from channels c
+       left join users u on c.owner_id = u.id
+       where c.slug = $1 limit 1`,
       [slug]
     );
     if (!rows.length) {
@@ -360,7 +384,7 @@ export async function updateChannel(req: Request, res: Response, next: NextFunct
   if (!uid) return;
 
   const channelId = req.params.id;
-  const { display_name, description, event, films } = req.body;
+  const { display_name, description, event, films, widgets, about_text, first_live_at } = req.body;
 
   const client = await pool.connect();
   let begun = false;
@@ -384,8 +408,15 @@ export async function updateChannel(req: Request, res: Response, next: NextFunct
 
     // Update channel
     const updated = await client.query(
-      `UPDATE channels SET display_name = $1, description = $2 WHERE id = $3 RETURNING *`,
-      [display_name, description, channelId]
+      `UPDATE channels
+       SET display_name = COALESCE($1, display_name),
+           description = COALESCE($2, description),
+           widgets = COALESCE($3, widgets),
+           about_text = COALESCE($4, about_text),
+           first_live_at = COALESCE($5, first_live_at)
+       WHERE id = $6
+       RETURNING *`,
+      [display_name, description, widgets ? JSON.stringify(widgets) : null, about_text, first_live_at, channelId]
     );
 
     // Handle event creation if provided (same logic as createChannel)
@@ -580,4 +611,116 @@ export async function getMyChannels(req: Request, res: Response): Promise<void> 
   );
 
   res.json(r.rows);
+}
+
+/* ===== NEW: Channel Schedule Endpoints ===== */
+
+// GET /api/channels/:slug/schedule - Get channel schedule
+export async function getChannelSchedule(req: Request, res: Response): Promise<void> {
+  const { slug } = req.params;
+  const client = await pool.connect();
+
+  try {
+    // Get channel ID
+    const chResult = await client.query('SELECT id FROM channels WHERE slug = $1', [slug]);
+    if (chResult.rows.length === 0) {
+      res.status(404).json({ error: 'Channel not found' });
+      return;
+    }
+    const channelId = chResult.rows[0].id;
+
+    const now = new Date();
+
+    // Get now playing (currently airing or most recent scheduled)
+    const nowResult = await client.query(
+      `SELECT cs.*, f.title as film_title, f.id as film_id
+       FROM channel_schedule cs
+       LEFT JOIN films f ON cs.film_id = f.id
+       WHERE cs.channel_id = $1
+         AND cs.scheduled_at <= $2
+       ORDER BY cs.scheduled_at DESC
+       LIMIT 1`,
+      [channelId, now]
+    );
+
+    // Get up next (future scheduled items)
+    const upNextResult = await client.query(
+      `SELECT cs.*, f.title as film_title, f.id as film_id
+       FROM channel_schedule cs
+       LEFT JOIN films f ON cs.film_id = f.id
+       WHERE cs.channel_id = $1
+         AND cs.scheduled_at > $2
+       ORDER BY cs.scheduled_at ASC
+       LIMIT 5`,
+      [channelId, now]
+    );
+
+    res.json({
+      now_playing: nowResult.rows[0] || null,
+      up_next: upNextResult.rows,
+      schedule: [...nowResult.rows, ...upNextResult.rows]
+    });
+  } catch (error) {
+    console.error('Error fetching schedule:', error);
+    res.status(500).json({ error: 'Failed to fetch schedule' });
+  } finally {
+    client.release();
+  }
+}
+
+// POST /api/channels/:slug/schedule - Create/update schedule items
+export async function updateChannelSchedule(req: Request, res: Response): Promise<void> {
+  const { slug } = req.params;
+  const uid = authUserIdOr401(req, res);
+  if (uid === null) return;
+
+  const { schedule } = req.body; // Array of {film_id, title, scheduled_at, duration_seconds}
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // Get channel and verify ownership
+    const chResult = await client.query(
+      'SELECT id, owner_id FROM channels WHERE slug = $1',
+      [slug]
+    );
+    if (chResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      res.status(404).json({ error: 'Channel not found' });
+      return;
+    }
+
+    const channel = chResult.rows[0];
+    if (channel.owner_id !== uid) {
+      await client.query('ROLLBACK');
+      res.status(403).json({ error: 'Not authorized' });
+      return;
+    }
+
+    // Insert schedule items (upsert on conflict)
+    for (const item of schedule) {
+      await client.query(
+        `INSERT INTO channel_schedule
+           (channel_id, film_id, title, scheduled_at, duration_seconds, status)
+         VALUES ($1, $2, $3, $4, $5, 'scheduled')
+         ON CONFLICT (channel_id, scheduled_at)
+         DO UPDATE SET
+           film_id = EXCLUDED.film_id,
+           title = EXCLUDED.title,
+           duration_seconds = EXCLUDED.duration_seconds`,
+        [channel.id, item.film_id || null, item.title || null, item.scheduled_at, item.duration_seconds || null]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error updating schedule:', error);
+    res.status(500).json({ error: 'Failed to update schedule' });
+  } finally {
+    client.release();
+  }
 }
