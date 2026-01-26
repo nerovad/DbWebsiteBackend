@@ -6,7 +6,7 @@ const NewsTicker: React.FC = () => {
   const tickerRef = useRef<HTMLDivElement>(null);
   const [duration, setDuration] = useState(50);
 
-  const tickerText = `Welcome to CineZoo! | Click anywhere on screen to navigate channels | Press 'm' to mute/unmute | Want your own channel or festival? Email us as cinezoo@gmail.com | Check out channel 99 for Friday Night Rewind: Live!`;
+  const tickerText = `Welcome to CineZoo! | Click anywhere on screen to navigate channels | Need to contact us? Email us as cinezoo@gmail.com | Oscars watch along with be on channel 7 this year, March 16th at 4:00 PM PST | Check out channel 99 for Friday Night Rewind: Live!`;
 
   useEffect(() => {
     if (tickerRef.current) {
