@@ -51,7 +51,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ isMenuOpen, isChatOpen, setVi
   const [currentIndex, setCurrentIndex] = useState(0);
   const [channelName, setChannelName] = useState("");
   const [isMuted, setIsMuted] = useState(true);
-  const [showMuteIcon, setShowMuteIcon] = useState(false);
+  const [showMuteIcon, setShowMuteIcon] = useState(true);
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [videoLinks, setVideoLinks] = useState<VideoLink[]>([
     { src: "/videos/Color_Bars_DB_Web.mp4", channel: "channel-0", channelNumber: 0, isLive: false },
@@ -208,8 +208,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ isMenuOpen, isChatOpen, setVi
     const muted = !v.muted;
     v.muted = muted;
     setIsMuted(muted);
-    setShowMuteIcon(true);
-    if (!muted) setTimeout(() => setShowMuteIcon(false), 200);
+    setShowMuteIcon(muted);
   };
 
   const toggleFullscreen = () => {
@@ -233,13 +232,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ isMenuOpen, isChatOpen, setVi
     checkVideo();
   }, []);
 
-  useEffect(() => {
-    const v = videoRef.current;
-    if (v?.muted) {
-      setShowMuteIcon(true);
-      setTimeout(() => setShowMuteIcon(false), 1500);
-    }
-  }, []);
 
   // ✅ Fetch channels
   // ✅ Fetch channels
