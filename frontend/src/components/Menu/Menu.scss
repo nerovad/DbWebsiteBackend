@@ -109,7 +109,7 @@ $lava-purple-accent: rgba(color.adjust($primary-color, $lightness: 15%), 0.3);
   }
 
   li {
-    font-size: 1.05rem;
+    font-size: 0.95rem;
     font-family: inherit;
     margin-bottom: 1rem;
     padding: 0.5rem;
@@ -129,12 +129,12 @@ $lava-purple-accent: rgba(color.adjust($primary-color, $lightness: 15%), 0.3);
     }
 
     strong {
-      font-size: 1.2rem;
+      font-size: 1.1rem;
       color: $primary-color;
     }
 
     p {
-      font-size: 0.95rem;
+      font-size: 0.85rem;
       color: #ddd;
       margin-top: 2px;
       transition: color 0.2s ease-in-out, font-weight 0.2s ease-in-out;
