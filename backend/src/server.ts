@@ -7,6 +7,7 @@ import { Server } from "socket.io";
 import setupSocket from "./sockets/chatSocket"; // ✅ fixed
 import authRoutes from "./routes/authRoutes";
 import chatRoutes from "./routes/chatRoutes";
+import directMessageRoutes from "./routes/directMessageRoutes";
 import voteRoutes from "./routes/voteRoutes";
 import profileRoutes from "./routes/profileRoutes";
 import errorHandler from "./middleware/errorHandler"; // ✅ fixed
@@ -42,6 +43,7 @@ app.use(cors());
 // Routes
 app.use(express.urlencoded({ extended: false }));
 app.use("/api/auth", authRoutes);
+app.use("/api/messages", directMessageRoutes);
 app.use("/api/messages", chatRoutes);
 app.use("/api", voteRoutes);
 app.use("/api/profile", profileRoutes);
@@ -70,6 +72,14 @@ const cleanupOldMessages = async () => {
     );
     if (result.rowCount && result.rowCount > 0) {
       console.log(`🧹 Cleaned up ${result.rowCount} old messages`);
+    }
+
+    // Cleanup expired direct messages
+    const dmResult = await pool.query(
+      `DELETE FROM direct_messages WHERE expires_at < NOW()`
+    );
+    if (dmResult.rowCount && dmResult.rowCount > 0) {
+      console.log(`🧹 Cleaned up ${dmResult.rowCount} expired direct messages`);
     }
   } catch (err) {
     console.error("Error cleaning up old messages:", err);

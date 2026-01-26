@@ -620,7 +620,7 @@ export async function getMyChannels(req: Request, res: Response): Promise<void> 
      FROM channels c
      LEFT JOIN sessions s ON s.channel_id = c.id AND s.is_active = true
      WHERE c.owner_id = $1
-     ORDER BY c.created_at DESC`,
+     ORDER BY c.channel_number ASC`,
     [uid]
   );
 

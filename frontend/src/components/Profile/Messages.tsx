@@ -23,6 +23,12 @@ type Conversation = {
   unreadCount: number;
 };
 
+type UserSearchResult = {
+  userId: string;
+  userHandle: string;
+  userAvatar?: string;
+};
+
 const Messages: React.FC = () => {
   const api = useApi();
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -31,7 +37,12 @@ const Messages: React.FC = () => {
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [showNewMessage, setShowNewMessage] = useState(false);
+  const [userSearch, setUserSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load conversations on mount
   useEffect(() => {
@@ -104,6 +115,51 @@ const Messages: React.FC = () => {
     }
   };
 
+  const handleUserSearch = (query: string) => {
+    setUserSearch(query);
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setSearching(true);
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const results = await api.get(`/api/messages/users/search?q=${encodeURIComponent(query)}`, []);
+        setSearchResults(results);
+      } catch (error) {
+        console.error("Failed to search users:", error);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+  };
+
+  const startConversation = (user: UserSearchResult) => {
+    // Add user to conversations if not already there
+    const existingConv = conversations.find(c => c.userId === user.userId);
+    if (!existingConv) {
+      setConversations(prev => [{
+        userId: user.userId,
+        userHandle: user.userHandle,
+        userAvatar: user.userAvatar,
+        lastMessage: "",
+        lastMessageTime: new Date().toISOString(),
+        unreadCount: 0
+      }, ...prev]);
+    }
+    setSelectedUserId(user.userId);
+    setMessages([]);
+    setShowNewMessage(false);
+    setUserSearch("");
+    setSearchResults([]);
+  };
+
   const formatTimeRemaining = (expiresAt: string) => {
     const now = new Date().getTime();
     const expiry = new Date(expiresAt).getTime();
@@ -142,8 +198,11 @@ const Messages: React.FC = () => {
       <div className="conversations-panel">
         <div className="panel-header">
           <h3>Messages</h3>
-          <span className="info-text">Disappear in 24h</span>
+          <button className="new-message-btn" onClick={() => setShowNewMessage(true)}>
+            + New
+          </button>
         </div>
+        <div className="info-text">Messages disappear in 24h</div>
 
         {conversations.length === 0 ? (
           <div className="empty-state">
@@ -261,6 +320,56 @@ const Messages: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* New Message Modal */}
+      {showNewMessage && (
+        <div className="new-message-modal-overlay" onClick={() => setShowNewMessage(false)}>
+          <div className="new-message-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>New Message</h3>
+              <button className="close-btn" onClick={() => setShowNewMessage(false)}>
+                &times;
+              </button>
+            </div>
+            <div className="modal-body">
+              <input
+                type="text"
+                className="user-search-input"
+                placeholder="Search for a user..."
+                value={userSearch}
+                onChange={(e) => handleUserSearch(e.target.value)}
+                autoFocus
+              />
+              {searching && <div className="search-loading">Searching...</div>}
+              {searchResults.length > 0 && (
+                <div className="search-results">
+                  {searchResults.map((user) => (
+                    <button
+                      key={user.userId}
+                      className="search-result-item"
+                      onClick={() => startConversation(user)}
+                    >
+                      <div className="avatar">
+                        {user.userAvatar ? (
+                          <img src={user.userAvatar} alt={user.userHandle} />
+                        ) : (
+                          <div className="avatar-placeholder">
+                            {user.userHandle[0].toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <span className="user-handle">{user.userHandle}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {userSearch.length >= 2 && !searching && searchResults.length === 0 && (
+                <div className="no-results">No users found</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
