@@ -1,10 +1,11 @@
+@use "sass:color";
 @use "../../styles/_variables.scss" as *;
 
 // Lava lamp purple shades derived from $primary-color: #a259ff
 $lava-purple-bright: rgba($primary-color, 0.4);
 $lava-purple-mid: rgba($primary-color, 0.25);
 $lava-purple-dark: rgba($primary-color, 0.12);
-$lava-purple-accent: rgba(lighten($primary-color, 15%), 0.3);
+$lava-purple-accent: rgba(color.adjust($primary-color, $lightness: 15%), 0.3);
 
 /* ===== YOUR ORIGINAL SIDEBAR STYLES (unchanged) ===== */
 .utilities-container {
@@ -613,7 +614,7 @@ $lava-purple-accent: rgba(lighten($primary-color, 15%), 0.3);
 
 /* Optional: nicer hover preview */
 .star:hover {
-  color: lighten($primary-color, 8%);
+  color: color.adjust($primary-color, $lightness: 8%);
   opacity: 1;
 }
 

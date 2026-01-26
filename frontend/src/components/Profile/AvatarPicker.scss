@@ -1,3 +1,4 @@
+@use "sass:color";
 @use "../../styles/_variables.scss" as *;
 
 // src/components/Profile/AvatarPicker.scss
@@ -61,7 +62,7 @@
     transition: all 0.2s;
 
     &:hover {
-      background: mix($background-color-secondary, $primary-color, 14%);
+      background: color.mix($background-color-secondary, $primary-color, 14%);
     }
 
     &.active {

@@ -8,8 +8,8 @@ import DownArrow from "../../assets/down_arrow.svg"
 import TvGuide from "../../assets/tv_guide_icon.svg"
 import Fullscreen from "../../assets/fullscreen_icon.svg"
 import Mute from "../../assets/mute_icon.svg"
-import CreateChannelModal from "../CreateChannelModal/CreateChannelModal";
 import { useChatStore } from "../../store/useChatStore";
+import { useAuth } from "../../store/AuthContext";
 
 type VideoLinkType = { src: string; channel: string; channelNumber: number; displayName?: string; tags?: string[] };
 
@@ -50,10 +50,10 @@ const SearchNavBar: React.FC<NavBarProps> = ({
   const navigate = useNavigate();
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [channelInput, setChannelInput] = useState("");
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const { setChannelId } = useChatStore();
+  const { user } = useAuth();
 
   // Current channel info for placeholder
   const currentChannel = videoLinks[currentIndex];
@@ -211,18 +211,6 @@ const SearchNavBar: React.FC<NavBarProps> = ({
       </div>
       {/* Right Links & Profile/Login */}
       <div className="search-navbar__links">
-
-        {/* ⬇️ New Create Channel button */}
-        {isLoggedIn && (
-          <button
-            id="create-channel-trigger"
-            className="search-navbar__create-channel-button"
-            onClick={() => setIsCreateOpen(true)}
-          >
-            + Create Channel
-          </button>
-        )}
-
         {!isLoggedIn ? (
           <>
             <button
@@ -235,6 +223,7 @@ const SearchNavBar: React.FC<NavBarProps> = ({
         ) : (
           <div className="search-navbar__profile" onClick={() => setShowProfileDropdown(!showProfileDropdown)}>
             <FaUserCircle className="search-navbar__profile-icon" size={24} />
+            <span className="search-navbar__username">{user?.username}</span>
             {showProfileDropdown && (
               <div className="profile-dropdown" onClick={(e) => e.stopPropagation()}>
                 <Link to="/profile" className="profile-dropdown__item">My Space</Link>
@@ -244,13 +233,6 @@ const SearchNavBar: React.FC<NavBarProps> = ({
           </div>
         )}
       </div>
-
-      {/*Modal */}
-      <CreateChannelModal
-        isOpen={isCreateOpen}
-        onClose={() => setIsCreateOpen(false)}
-        excludeClickId="create-channel-trigger"
-      />
     </div>
   );
 };

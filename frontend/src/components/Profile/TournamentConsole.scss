@@ -1,4 +1,5 @@
-@import '../../styles/variables.scss';
+@use "sass:color";
+@use "../../styles/_variables.scss" as *;
 
 // Modal overlay and container
 .tournament-console-modal {
@@ -48,7 +49,7 @@
       border-radius: 4px;
 
       &:hover {
-        background: lighten($primary-color, 10%);
+        background: color.adjust($primary-color, $lightness: 10%);
       }
     }
   }
@@ -208,7 +209,7 @@
       box-shadow: 0 4px 12px rgba($secondary-color, 0.3);
 
       &:hover:not(:disabled) {
-        background: lighten($secondary-color, 10%);
+        background: color.adjust($secondary-color, $lightness: 10%);
         transform: translateY(-2px);
         box-shadow: 0 6px 16px rgba($secondary-color, 0.5);
       }
@@ -224,7 +225,7 @@
       box-shadow: 0 4px 12px rgba($accent-secondary-color, 0.3);
 
       &:hover:not(:disabled) {
-        background: lighten($accent-secondary-color, 10%);
+        background: color.adjust($accent-secondary-color, $lightness: 10%);
         transform: translateY(-2px);
         box-shadow: 0 6px 16px rgba($accent-secondary-color, 0.5);
       }

@@ -1,4 +1,5 @@
-@import '../../styles/variables';
+@use "sass:color";
+@use "../../styles/_variables.scss" as *;
 
 .tournament-seeding {
   padding: 1.5rem;
@@ -49,7 +50,7 @@
         font-family: $primary-font-family;
 
         &:hover {
-          background: lighten($background-color-primary, 5%);
+          background: color.adjust($background-color-primary, $lightness: 5%);
           border-color: $primary-color;
           box-shadow: 0 0 10px rgba($primary-color, 0.3);
         }
@@ -85,7 +86,7 @@
       font-family: $primary-font-family;
 
       &:hover {
-        background: lighten($background-color-primary, 5%);
+        background: color.adjust($background-color-primary, $lightness: 5%);
         border-color: $secondary-color;
         color: $secondary-color;
         box-shadow: 0 0 15px rgba($secondary-color, 0.3);
@@ -114,7 +115,7 @@
       border-radius: 4px;
 
       &:hover {
-        background: lighten($primary-color, 10%);
+        background: color.adjust($primary-color, $lightness: 10%);
       }
     }
 
@@ -130,7 +131,7 @@
       transition: all 0.2s;
 
       &:hover {
-        background: lighten($background-color-primary, 5%);
+        background: color.adjust($background-color-primary, $lightness: 5%);
         border-color: $primary-color;
         box-shadow: 0 0 10px rgba($primary-color, 0.3);
       }
@@ -308,7 +309,7 @@
       box-shadow: 0 0 15px rgba($primary-color, 0.4);
 
       &:hover {
-        background: lighten($primary-color, 10%);
+        background: color.adjust($primary-color, $lightness: 10%);
         box-shadow: 0 0 25px rgba($primary-color, 0.6);
         transform: translateY(-2px);
       }

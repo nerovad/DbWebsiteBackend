@@ -1,3 +1,4 @@
+@use "sass:color";
 @use "../../styles/_variables.scss" as *;
 
 /* ========= Profile (DainBramage branding) ========= */
@@ -101,7 +102,7 @@
   transition: all 0.2s ease;
   
   &:hover {
-    background: mix($primary-color, $accent-secondary-color, 12%);
+    background: color.mix($primary-color, $accent-secondary-color, 12%);
     transform: scale(1.1);
   }
 }
@@ -142,7 +143,7 @@
 
     &:hover {
       transform: translateY(-1px);
-      background: mix($background-color-secondary, $primary-color, 12%);
+      background: color.mix($background-color-secondary, $primary-color, 12%);
       box-shadow: 0 8px 18px rgba($primary-color, .15);
     }
 
@@ -151,7 +152,7 @@
       background: $primary-color;
       color: $channel-text-color;
       &:hover {
-        background: mix($primary-color, $accent-secondary-color, 12%);
+        background: color.mix($primary-color, $accent-secondary-color, 12%);
         box-shadow: 0 8px 20px rgba($primary-color, .25);
       }
     }
@@ -219,7 +220,7 @@
     transition: background .2s ease, box-shadow .2s ease, border-color .2s ease;
 
     &:hover {
-      background: mix($background-color-secondary, $primary-color, 14%);
+      background: color.mix($background-color-secondary, $primary-color, 14%);
       box-shadow: 0 0 0 2px rgba($primary-color, .35) inset;
     }
 
@@ -268,7 +269,7 @@
   .row-actions { display: flex; gap: 8px; margin-top: 10px; }
   .socials { margin: 0; padding: 0 0 0 16px;
     a { color: $primary-color; text-decoration: none;
-      &:hover { text-decoration: underline; color: mix($primary-color, $accent-secondary-color, 20%); }
+      &:hover { text-decoration: underline; color: color.mix($primary-color, $accent-secondary-color, 20%); }
     }
     li { color: $text-color-secondary; }
   }

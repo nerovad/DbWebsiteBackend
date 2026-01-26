@@ -48,6 +48,7 @@ type ScheduleItem = {
   title: string;
   scheduled_at: string;
   duration_seconds?: number | null;
+  durationInput?: string; // Raw input string for auto-formatting
   status?: string;
 };
 
@@ -57,6 +58,7 @@ const emptyScheduleItem: ScheduleItem = {
   title: "",
   scheduled_at: "",
   duration_seconds: null,
+  durationInput: "",
 };
 
 // Convert seconds to timecode (HH:MM:SS)
@@ -83,6 +85,27 @@ const timecodeToSeconds = (timecode: string): number | null => {
     return parts[0] * 60 + parts[1];
   }
   return null;
+};
+
+// Auto-format timecode input: inserts colons as user types digits
+// Input: raw digits like "12345" -> Output: "1:23:45"
+const formatTimecodeInput = (value: string): string => {
+  // Remove all non-digit characters
+  const digits = value.replace(/\D/g, '');
+
+  // Limit to 6 digits (HH:MM:SS)
+  const limited = digits.slice(0, 6);
+
+  // Insert colons from the right (SS first, then MM, then HH)
+  const len = limited.length;
+  if (len === 0) return '';
+  if (len <= 2) return limited;
+  if (len <= 4) {
+    // MM:SS format
+    return `${limited.slice(0, len - 2)}:${limited.slice(-2)}`;
+  }
+  // HH:MM:SS format
+  return `${limited.slice(0, len - 4)}:${limited.slice(-4, -2)}:${limited.slice(-2)}`;
 };
 
 const EditChannelModal: React.FC<Props> = ({ isOpen, onClose, channel, onUpdate }) => {
@@ -142,7 +165,9 @@ const EditChannelModal: React.FC<Props> = ({ isOpen, onClose, channel, onUpdate 
             ].map(item => ({
               ...item,
               // Convert ISO string to datetime-local format (YYYY-MM-DDTHH:mm)
-              scheduled_at: item.scheduled_at ? new Date(item.scheduled_at).toISOString().slice(0, 16) : ""
+              scheduled_at: item.scheduled_at ? new Date(item.scheduled_at).toISOString().slice(0, 16) : "",
+              // Initialize durationInput from stored seconds
+              durationInput: secondsToTimecode(item.duration_seconds)
             }));
             setScheduleItems(allItems.length > 0 ? allItems : []);
           } else {
@@ -440,69 +465,85 @@ const EditChannelModal: React.FC<Props> = ({ isOpen, onClose, channel, onUpdate 
                   <div className="schedule-table">
                     {scheduleItems.map((item, idx) => (
                       <div key={idx} className="schedule-row">
-                        <div className="schedule-field">
-                          <label>Film/Title</label>
-                          {channelFilms.length > 0 ? (
-                            <select
-                              value={item.film_id || ""}
-                              onChange={(e) => {
-                                const filmId = e.target.value ? parseInt(e.target.value) : null;
-                                const film = channelFilms.find(f => f.id === filmId);
-                                updateScheduleItem(idx, {
-                                  film_id: filmId,
-                                  title: film?.title || item.title,
-                                  duration_seconds: film?.runtime_seconds || item.duration_seconds
-                                });
-                              }}
-                            >
-                              <option value="">-- Select Film --</option>
-                              {channelFilms.map(film => (
-                                <option key={film.id} value={film.id}>
-                                  {film.title}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
+                        <div className="schedule-fields-grid">
+                          <div className="schedule-field">
+                            <label>Film/Title</label>
+                            {channelFilms.length > 0 ? (
+                              <select
+                                value={item.film_id || ""}
+                                onChange={(e) => {
+                                  const filmId = e.target.value ? parseInt(e.target.value) : null;
+                                  const film = channelFilms.find(f => f.id === filmId);
+                                  const durationSecs = film?.runtime_seconds || item.duration_seconds;
+                                  updateScheduleItem(idx, {
+                                    film_id: filmId,
+                                    title: film?.title || item.title,
+                                    duration_seconds: durationSecs,
+                                    durationInput: secondsToTimecode(durationSecs)
+                                  });
+                                }}
+                              >
+                                <option value="">-- Select Film --</option>
+                                {channelFilms.map(film => (
+                                  <option key={film.id} value={film.id}>
+                                    {film.title}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                type="text"
+                                placeholder="Title"
+                                value={item.title}
+                                onChange={(e) => updateScheduleItem(idx, { title: e.target.value })}
+                              />
+                            )}
+                          </div>
+
+                          <div className="schedule-field">
+                            <label>Air Date & Time</label>
+                            <input
+                              type="datetime-local"
+                              value={item.scheduled_at}
+                              onChange={(e) => updateScheduleItem(idx, { scheduled_at: e.target.value })}
+                            />
+                          </div>
+
+                          <div className="schedule-field duration-field">
+                            <label>Duration</label>
                             <input
                               type="text"
-                              placeholder="Title"
-                              value={item.title}
-                              onChange={(e) => updateScheduleItem(idx, { title: e.target.value })}
+                              placeholder="HH:MM:SS"
+                              value={item.durationInput ?? secondsToTimecode(item.duration_seconds)}
+                              onChange={(e) => {
+                                const formatted = formatTimecodeInput(e.target.value);
+                                updateScheduleItem(idx, {
+                                  durationInput: formatted
+                                });
+                              }}
+                              onBlur={(e) => {
+                                // Convert to seconds when user leaves the field
+                                const seconds = timecodeToSeconds(e.target.value);
+                                updateScheduleItem(idx, {
+                                  duration_seconds: seconds,
+                                  durationInput: seconds ? secondsToTimecode(seconds) : e.target.value
+                                });
+                              }}
+                              title="Format: HH:MM:SS or MM:SS"
                             />
-                          )}
+                          </div>
                         </div>
 
-                        <div className="schedule-field">
-                          <label>Air Date & Time</label>
-                          <input
-                            type="datetime-local"
-                            value={item.scheduled_at}
-                            onChange={(e) => updateScheduleItem(idx, { scheduled_at: e.target.value })}
-                          />
+                        <div className="schedule-row-actions">
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            aria-label="Remove schedule item"
+                            onClick={() => removeScheduleRow(idx)}
+                          >
+                            ✕ Remove
+                          </button>
                         </div>
-
-                        <div className="schedule-field duration-field">
-                          <label>Duration</label>
-                          <input
-                            type="text"
-                            placeholder="HH:MM:SS"
-                            value={secondsToTimecode(item.duration_seconds)}
-                            onChange={(e) => updateScheduleItem(idx, {
-                              duration_seconds: timecodeToSeconds(e.target.value)
-                            })}
-                            pattern="^(\d{1,2}:)?\d{1,2}:\d{2}$"
-                            title="Format: HH:MM:SS or MM:SS"
-                          />
-                        </div>
-
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          aria-label="Remove schedule item"
-                          onClick={() => removeScheduleRow(idx)}
-                        >
-                          ✕
-                        </button>
                       </div>
                     ))}
                   </div>

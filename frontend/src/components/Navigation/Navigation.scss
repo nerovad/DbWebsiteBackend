@@ -68,10 +68,8 @@
       padding-left: 0.5rem;
       font-family: $primary-font-family;
       font-weight: 700;
-      text-shadow: 0 0 2px $accent-secondary-color;
       &::placeholder {
         color: $accent-secondary-color;
-        text-shadow: 0 0 2px $accent-secondary-color;
         font-size: 0.85rem;
       }
     }
@@ -284,15 +282,33 @@
     position: relative;
     cursor: pointer;
     margin-top: 0.3rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 4px 10px 4px 6px;
+    border-radius: 6px;
+    transition: background 0.2s ease;
+
+    &:hover {
+      background: rgba($primary-color, 0.15);
+    }
   }
 
   &__profile-icon {
     cursor: pointer;
     transition: transform 0.2s;
+    color: $primary-color;
+    flex-shrink: 0;
+  }
 
-    &:hover {
-      transform: scale (1.1);
-    }
+  &__username {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: $text-color-primary;
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   // Login Button (Only visible when not logged in)
@@ -319,44 +335,116 @@
   // Profile Dropdown (Only visible when logged in)
   .profile-dropdown {
     position: absolute;
-    top: 40px;
+    top: 45px;
     right: 0;
-    background: $background-color-primary;
-    border: 1px solid $border-color-primary;
-    border-radius: 5px;
-    padding: 10px;
+    background: rgba($background-color-primary, 0.97);
+    backdrop-filter: blur(12px);
+    border: 2px solid $primary-color;
+    border-radius: 8px;
+    padding: 0;
     display: flex;
     flex-direction: column;
-    min-width: 150px;
+    min-width: 160px;
     z-index: 1000000;
-    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2);
+    box-shadow:
+      0 0 20px rgba($primary-color, 0.4),
+      0 8px 32px rgba(0, 0, 0, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
     font-family: $primary-font-family;
+    overflow: hidden;
+    animation: dropdown-slide-in 0.2s ease-out;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, $primary-color, transparent);
+      opacity: 0.6;
+    }
 
     &__item {
-      padding: 10px;
+      padding: 12px 16px;
       color: $text-color-primary;
       text-decoration: none;
-      transition: background 0.3s;
+      transition: all 0.2s ease;
       display: block;
+      font-size: 0.85rem;
+      border-bottom: 1px solid rgba($primary-color, 0.2);
+      position: relative;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: $primary-color;
+        transform: scaleY(0);
+        transition: transform 0.2s ease;
+      }
 
       &:hover {
-        background: $text-color-secondary;
+        background: rgba($primary-color, 0.15);
+        color: $channel-text-color;
+        text-shadow: 0 0 8px rgba($primary-color, 0.5);
+        padding-left: 20px;
+
+        &::before {
+          transform: scaleY(1);
+        }
       }
     }
 
     &__logout {
-      background: $primary-color;
-      color: $channel-text-color;
+      background: transparent;
+      color: $primary-color;
       border: none;
-      padding: 10px;
+      padding: 12px 16px;
       cursor: pointer;
       width: 100%;
-      text-align: center;
-      transition: background 0.3s;
+      text-align: left;
+      font-size: 0.85rem;
+      font-family: $primary-font-family;
+      transition: all 0.2s ease;
+      position: relative;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: $accent-secondary-color;
+        transform: scaleY(0);
+        transition: transform 0.2s ease;
+      }
 
       &:hover {
-        background: $text-color-secondary;
+        background: rgba($accent-secondary-color, 0.15);
+        color: $accent-secondary-color;
+        text-shadow: 0 0 8px rgba($accent-secondary-color, 0.5);
+        padding-left: 20px;
+
+        &::before {
+          transform: scaleY(1);
+        }
       }
+    }
+  }
+
+  @keyframes dropdown-slide-in {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
     }
   }
   // Create Channel button (sits next to TV Guide)

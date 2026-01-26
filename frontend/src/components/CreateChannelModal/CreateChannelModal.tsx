@@ -35,6 +35,27 @@ const timecodeToSeconds = (timecode: string): number | null => {
   return null;
 };
 
+// Auto-format timecode input: inserts colons as user types digits
+// Input: raw digits like "12345" -> Output: "1:23:45"
+const formatTimecodeInput = (value: string): string => {
+  // Remove all non-digit characters
+  const digits = value.replace(/\D/g, '');
+
+  // Limit to 6 digits (HH:MM:SS)
+  const limited = digits.slice(0, 6);
+
+  // Insert colons from the right (SS first, then MM, then HH)
+  const len = limited.length;
+  if (len === 0) return '';
+  if (len <= 2) return limited;
+  if (len <= 4) {
+    // MM:SS format
+    return `${limited.slice(0, len - 2)}:${limited.slice(-2)}`;
+  }
+  // HH:MM:SS format
+  return `${limited.slice(0, len - 4)}:${limited.slice(-4, -2)}:${limited.slice(-2)}`;
+};
+
 // General widgets available for all channels
 const GENERAL_WIDGETS = [
   { type: 'about', name: 'About', description: 'Channel info and description', icon: 'ℹ️' },
@@ -402,42 +423,48 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, onChannelCreated
                 <div className="schedule-table">
                   {scheduleItems.map((item, idx) => (
                     <div key={idx} className="schedule-row">
-                      <div className="schedule-field">
-                        <label>Program Title</label>
-                        <input
-                          type="text"
-                          placeholder="e.g., Movie Night"
-                          value={item.title}
-                          onChange={(e) => updateScheduleItem(idx, { title: e.target.value })}
-                        />
+                      <div className="schedule-fields-grid">
+                        <div className="schedule-field">
+                          <label>Program Title</label>
+                          <input
+                            type="text"
+                            placeholder="e.g., Movie Night"
+                            value={item.title}
+                            onChange={(e) => updateScheduleItem(idx, { title: e.target.value })}
+                          />
+                        </div>
+                        <div className="schedule-field">
+                          <label>Air Date & Time</label>
+                          <input
+                            type="datetime-local"
+                            value={item.scheduled_at}
+                            onChange={(e) => updateScheduleItem(idx, { scheduled_at: e.target.value })}
+                          />
+                        </div>
+                        <div className="schedule-field duration-field">
+                          <label>Duration</label>
+                          <input
+                            type="text"
+                            placeholder="HH:MM:SS"
+                            value={item.duration}
+                            onChange={(e) => {
+                              const formatted = formatTimecodeInput(e.target.value);
+                              updateScheduleItem(idx, { duration: formatted });
+                            }}
+                            title="Format: HH:MM:SS or MM:SS"
+                          />
+                        </div>
                       </div>
-                      <div className="schedule-field">
-                        <label>Air Date & Time</label>
-                        <input
-                          type="datetime-local"
-                          value={item.scheduled_at}
-                          onChange={(e) => updateScheduleItem(idx, { scheduled_at: e.target.value })}
-                        />
+                      <div className="schedule-row-actions">
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          aria-label="Remove time slot"
+                          onClick={() => removeScheduleRow(idx)}
+                        >
+                          ✕ Remove
+                        </button>
                       </div>
-                      <div className="schedule-field duration-field">
-                        <label>Duration</label>
-                        <input
-                          type="text"
-                          placeholder="HH:MM:SS"
-                          value={item.duration}
-                          onChange={(e) => updateScheduleItem(idx, { duration: e.target.value })}
-                          pattern="^(\d{1,2}:)?\d{1,2}:\d{2}$"
-                          title="Format: HH:MM:SS or MM:SS"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        aria-label="Remove time slot"
-                        onClick={() => removeScheduleRow(idx)}
-                      >
-                        ✕
-                      </button>
                     </div>
                   ))}
                 </div>

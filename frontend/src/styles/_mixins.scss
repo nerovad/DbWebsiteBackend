@@ -1,3 +1,5 @@
+@use "sass:color";
+
 // Flex Centering
 @mixin flex-center {
   display: flex;
@@ -27,7 +29,7 @@
   @include transition(background-color);
   
   &:hover {
-    background-color: darken($bg-color, 10%);
+    background-color: color.adjust($bg-color, $lightness: -10%);
   }
 }
 

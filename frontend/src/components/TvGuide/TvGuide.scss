@@ -1,3 +1,4 @@
+@use "sass:color";
 @use "../../styles/_variables.scss" as *;
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
 
@@ -20,7 +21,7 @@
   .tv-guide-content {
     width: 80%;
     max-width: 600px;
-    background: linear-gradient(to bottom, $background-color-primary, darken($background-color-primary, 10%));
+    background: linear-gradient(to bottom, $background-color-primary, color.adjust($background-color-primary, $lightness: -10%));
     border: 2px solid $border-color-primary;
     border-radius: 10px;
     box-shadow: 0 0 10px rgba($primary-color, 0.6);

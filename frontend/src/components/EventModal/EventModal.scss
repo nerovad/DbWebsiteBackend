@@ -1,3 +1,4 @@
+@use "sass:color";
 @use "../../styles/_variables.scss" as *;
 
 .event-modal-overlay {
@@ -22,7 +23,7 @@
   background: linear-gradient(
     to bottom,
     $background-color-primary,
-    darken($background-color-primary, 8%)
+    color.adjust($background-color-primary, $lightness: -8%)
   );
   border: 2px solid $secondary-color;
   border-radius: 12px;
@@ -129,7 +130,7 @@
     }
 
     &:hover {
-      border-color: lighten($border-color-primary, 10%);
+      border-color: color.adjust($border-color-primary, $lightness: 10%);
     }
   }
 
@@ -341,7 +342,7 @@
   margin-top: 0.5rem;
 
   &:hover:not(:disabled) {
-    background-color: lighten($secondary-color, 8%);
+    background-color: color.adjust($secondary-color, $lightness: 8%);
     transform: translateY(-1px);
     box-shadow: 0 4px 15px rgba($secondary-color, 0.4);
   }

@@ -1,3 +1,4 @@
+@use "sass:color";
 @use "../../styles/_variables.scss" as *;
 
 .create-channel-overlay {
@@ -22,7 +23,7 @@
   background: linear-gradient(
     to bottom,
     $background-color-primary,
-    darken($background-color-primary, 10%)
+    color.adjust($background-color-primary, $lightness: -10%)
   );
   border: 2px solid $border-color-primary;
   border-radius: 10px;
@@ -99,7 +100,7 @@
       border-color: $secondary-color;
       box-shadow: 0 0 0 3px rgba($secondary-color, 0.1);
     }
-    &:hover { border-color: lighten($border-color-primary, 10%); }
+    &:hover { border-color: color.adjust($border-color-primary, $lightness: 10%); }
   }
 
   button[type="submit"] {
@@ -119,7 +120,7 @@
     margin-top: 0.5rem;
 
     &:hover:not(:disabled) {
-      background-color: darken($primary-color, 5%);
+      background-color: color.adjust($primary-color, $lightness: -5%);
       transform: translateY(-1px);
       box-shadow: 0 4px 12px rgba($primary-color, 0.3);
     }
@@ -149,7 +150,7 @@
 .channel-details {
   margin-top: 1.5rem;
   padding: 1.5rem;
-  background-color: darken($background-color-primary, 3%);
+  background-color: color.adjust($background-color-primary, $lightness: -3%);
   border: 2px solid $border-color-primary;
   border-radius: 8px;
   font-family: $primary-font-family;
@@ -197,7 +198,7 @@
       letter-spacing: 0.5px;
 
       &:hover {
-        background-color: lighten($secondary-color, 10%);
+        background-color: color.adjust($secondary-color, $lightness: 10%);
         transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba($secondary-color, 0.3);
       }
@@ -321,7 +322,7 @@
       border-color: $secondary-color;
       box-shadow: 0 0 0 3px rgba($secondary-color, 0.1);
     }
-    &:hover { border-color: lighten($border-color-primary, 10%); }
+    &:hover { border-color: color.adjust($border-color-primary, $lightness: 10%); }
     &:disabled {
       opacity: 0.7;
       cursor: not-allowed;
@@ -350,7 +351,7 @@
       border-color: $secondary-color;
       box-shadow: 0 0 0 3px rgba($secondary-color, 0.1);
     }
-    &:hover { border-color: lighten($border-color-primary, 10%); }
+    &:hover { border-color: color.adjust($border-color-primary, $lightness: 10%); }
   }
 
   /* datetime-local fields (inherit input styles automatically) */
@@ -367,8 +368,8 @@
     border-radius: 8px;
     background: linear-gradient(
       to bottom,
-      darken($background-color-primary, 2%),
-      darken($background-color-primary, 5%)
+      color.adjust($background-color-primary, $lightness: -2%),
+      color.adjust($background-color-primary, $lightness: -5%)
     );
 
     /* subtle inset */
@@ -480,7 +481,7 @@
 
 .form-error {
   font-size: 0.9rem;
-  color: mix($secondary-color, #ff4d4f, 40%);
+  color: color.mix($secondary-color, #ff4d4f, 40%);
   margin-top: 0.25rem;
 }
 
@@ -577,8 +578,8 @@
   border-radius: 8px;
   background: linear-gradient(
     to bottom,
-    darken($background-color-primary, 2%),
-    darken($background-color-primary, 5%)
+    color.adjust($background-color-primary, $lightness: -2%),
+    color.adjust($background-color-primary, $lightness: -5%)
   );
 
   .schedule-header {
@@ -612,19 +613,25 @@
     gap: 1rem;
 
     .schedule-row {
-      display: grid;
-      grid-template-columns: 1.4fr 1.4fr 0.8fr auto;
+      display: flex;
+      flex-direction: column;
       gap: 0.75rem;
-      align-items: end;
-      padding: 0.75rem;
+      padding: 1rem;
       background: rgba(0, 0, 0, 0.15);
       border-radius: 6px;
       border: 1px solid rgba(255, 255, 255, 0.05);
 
+      .schedule-fields-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 120px;
+        gap: 0.75rem;
+        align-items: end;
+      }
+
       .schedule-field {
         display: flex;
         flex-direction: column;
-        gap: 0.25rem;
+        gap: 0.35rem;
 
         label {
           font-size: 0.8rem;
@@ -636,6 +643,7 @@
 
         input {
           min-width: 0;
+          width: 100%;
         }
 
         &.duration-field input {
@@ -645,46 +653,43 @@
         }
       }
 
+      .schedule-row-actions {
+        display: flex;
+        justify-content: flex-end;
+        padding-top: 0.5rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
       .icon-btn {
-        align-self: end;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         min-width: 40px;
-        height: 42px;
-        padding: 0.4rem;
+        height: 36px;
+        padding: 0.4rem 0.75rem;
         border-radius: 6px;
         border: 2px solid $border-color-primary;
         background: $background-color-primary;
         color: $text-color-primary;
         font-weight: 800;
+        font-size: 0.85rem;
         cursor: pointer;
         transition: all 0.2s ease-in-out;
 
         &:hover {
-          border-color: $secondary-color;
-          color: $secondary-color;
+          border-color: #ff4d4d;
+          color: #ff4d4d;
           transform: translateY(-1px);
-          box-shadow: 0 4px 10px rgba($secondary-color, 0.2);
+          box-shadow: 0 4px 10px rgba(#ff4d4d, 0.2);
         }
       }
     }
   }
 }
 
-@media (max-width: 720px) {
-  .schedule-editor .schedule-table .schedule-row {
-    grid-template-columns: 1fr 1fr;
-
-    .schedule-field:first-child {
-      grid-column: 1 / -1;
-    }
-
-    .icon-btn {
-      grid-row: 2;
-      grid-column: 2;
-      justify-self: end;
-    }
+@media (max-width: 600px) {
+  .schedule-editor .schedule-table .schedule-row .schedule-fields-grid {
+    grid-template-columns: 1fr;
   }
 }
 
