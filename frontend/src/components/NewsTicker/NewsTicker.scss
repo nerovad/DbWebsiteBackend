@@ -8,15 +8,53 @@
   color: $secondary-color;
   font-family: $primary-font-family;
   font-size: 29.1px;
-  overflow: hidden;
   z-index: 100001;
   padding: 3px 0;
+  transition: padding 0.3s ease;
+
+  &.minimized {
+    padding: 0;
+  }
+}
+
+.ticker-wrapper {
+  overflow: hidden;
+  width: 100%;
+  position: relative;
+}
+
+.ticker-toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: transparent;
+  color: $accent-secondary-color;
+  border: none;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 14px;
+  z-index: 100002;
+
+  &:hover {
+    opacity: 0.7;
+  }
+
+  .minimized & {
+    top: -24px;
+    transform: none;
+    background-color: $background-color-secondary;
+    border-radius: 4px 4px 0 0;
+    padding: 2px 12px;
+    font-size: 12px;
+  }
 }
 
 .ticker {
-  display: inline-block;
+  display: inline-flex;
   white-space: nowrap;
   animation: scroll linear infinite;
+  will-change: transform;
 }
 
 @keyframes scroll {
