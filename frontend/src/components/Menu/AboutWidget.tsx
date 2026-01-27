@@ -12,6 +12,7 @@ interface ChannelAbout {
   first_live_at: string | null;
   created_at: string;
   display_name: string;
+  thumbnail: string | null;
 }
 
 const AboutWidget: React.FC<Props> = ({ channelId }) => {
@@ -30,7 +31,8 @@ const AboutWidget: React.FC<Props> = ({ channelId }) => {
           owner_name: channelData.owner_name || 'Unknown',
           first_live_at: channelData.first_live_at,
           created_at: channelData.created_at,
-          display_name: channelData.display_name || channelData.name
+          display_name: channelData.display_name || channelData.name,
+          thumbnail: channelData.thumbnail || null
         });
       } catch (error) {
         console.error('Error fetching about data:', error);
@@ -53,6 +55,11 @@ const AboutWidget: React.FC<Props> = ({ channelId }) => {
 
   return (
     <div className="about-widget">
+      {data.thumbnail && (
+        <div className="about-thumbnail">
+          <img src={data.thumbnail} alt={data.display_name} />
+        </div>
+      )}
       <h2>{data.display_name}</h2>
 
       {data.about_text && (
