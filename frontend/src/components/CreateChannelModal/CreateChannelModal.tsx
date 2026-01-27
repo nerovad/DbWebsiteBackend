@@ -84,6 +84,10 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, onChannelCreated
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
 
+  // Thumbnail
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
+
   // Track taken channel numbers
   const [takenChannelNumbers, setTakenChannelNumbers] = useState<Set<number>>(new Set());
   const [loadingChannels, setLoadingChannels] = useState(false);
@@ -200,6 +204,43 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, onChannelCreated
     }
   };
 
+  // Thumbnail handlers
+  const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setThumbnailFile(file);
+      const previewUrl = URL.createObjectURL(file);
+      setThumbnailPreview(previewUrl);
+    }
+  };
+
+  const removeThumbnail = () => {
+    if (thumbnailPreview) {
+      URL.revokeObjectURL(thumbnailPreview);
+    }
+    setThumbnailFile(null);
+    setThumbnailPreview(null);
+  };
+
+  // Cleanup preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (thumbnailPreview) {
+        URL.revokeObjectURL(thumbnailPreview);
+      }
+    };
+  }, [thumbnailPreview]);
+
+  // Convert file to base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit()) return;
@@ -215,6 +256,12 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, onChannelCreated
           duration_seconds: timecodeToSeconds(item.duration),
         }));
 
+      // Convert thumbnail to base64 if present
+      let thumbnailBase64: string | null = null;
+      if (thumbnailFile) {
+        thumbnailBase64 = await fileToBase64(thumbnailFile);
+      }
+
       const body: any = {
         name: generateInternalName(channelNumber),
         display_name: displayName,
@@ -224,6 +271,7 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, onChannelCreated
         about_text: aboutText || null,
         schedule: normalizedSchedule.length > 0 ? normalizedSchedule : null,
         tags: tags.length > 0 ? tags : null,
+        thumbnail: thumbnailBase64,
       };
 
       const token = localStorage.getItem("token");
@@ -253,6 +301,7 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, onChannelCreated
       setScheduleItems([]);
       setTags([]);
       setTagInput("");
+      removeThumbnail();
       setSuccess(true);
 
       // Notify parent
@@ -357,6 +406,39 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, onChannelCreated
               </div>
             )}
             <small className="form-hint">Add tags to help categorize your channel (e.g., horror, comedy, indie)</small>
+          </div>
+
+          {/* Thumbnail Upload */}
+          <div className="row">
+            <label htmlFor="thumbnail-upload">Channel Thumbnail</label>
+            {thumbnailPreview ? (
+              <div className="thumbnail-preview">
+                <img src={thumbnailPreview} alt="Thumbnail preview" />
+                <button
+                  type="button"
+                  className="thumbnail-remove"
+                  onClick={removeThumbnail}
+                  aria-label="Remove thumbnail"
+                >
+                  ×
+                </button>
+              </div>
+            ) : (
+              <div className="thumbnail-upload-area">
+                <input
+                  id="thumbnail-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleThumbnailChange}
+                  className="thumbnail-input"
+                />
+                <label htmlFor="thumbnail-upload" className="thumbnail-upload-label">
+                  <span className="upload-icon">📷</span>
+                  <span>Click to upload thumbnail</span>
+                </label>
+              </div>
+            )}
+            <small className="form-hint">Optional. Recommended size: 320x180 pixels</small>
           </div>
 
           {/* Widget Selector - General widgets only */}

@@ -73,7 +73,7 @@ type ProfileData = {
   };
 };
 
-type TabKey = "overview" | "channels" | "films" | "awards" | "messages" | "companies" | "settings";
+type TabKey = "overview" | "channels" | "films" | "messages" | "companies" | "settings";
 
 const DEFAULT_PROFILE: ProfileData = {
   id: "me",
@@ -219,7 +219,6 @@ const Profile: React.FC = () => {
 
   const statItems = [
     { label: "Channels", value: channels.length },
-    { label: "Awards", value: profile.stats.awards || awards.length },
   ];
 
   if (loading) {
@@ -321,7 +320,6 @@ const Profile: React.FC = () => {
         {[
           ["overview", "Overview"],
           ["channels", "Channels"],
-          ["awards", "Awards"],
           ["messages", "Messages"],
           ["settings", "Settings"],
         ].map(([key, label]) => (
@@ -466,29 +464,6 @@ const Profile: React.FC = () => {
                   </div>
                 ))}
               </div>
-            )}
-          </section>
-        )}
-
-        {active === "awards" && (
-          <section className="panel">
-            <div className="panel-head">
-              <h2>Awards</h2>
-            </div>
-            {awards.length === 0 ? (
-              <p className="muted">No awards yet. Start submitting your films to win!</p>
-            ) : (
-              <ul className="list awards">
-                {awards.map((a) => (
-                  <li key={a.id} className="list-item">
-                    <div className="award-name">{a.name}</div>
-                    <div className="award-meta">
-                      {a.work && <span className="chip">{a.work}</span>}
-                      {a.year && <span className="chip">{a.year}</span>}
-                    </div>
-                  </li>
-                ))}
-              </ul>
             )}
           </section>
         )}

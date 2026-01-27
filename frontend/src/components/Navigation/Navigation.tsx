@@ -58,7 +58,7 @@ const SearchNavBar: React.FC<NavBarProps> = ({
   // Current channel info for placeholder
   const currentChannel = videoLinks[currentIndex];
   const placeholderText = currentChannel
-    ? `${currentChannel.channelNumber}${currentChannel.displayName ? ` - ${currentChannel.displayName}` : ''}`
+    ? `Ch ${currentChannel.channelNumber}${currentChannel.displayName ? ` - ${currentChannel.displayName}` : ''}`
     : "Search channels...";
 
   // Search results - filter channels based on input

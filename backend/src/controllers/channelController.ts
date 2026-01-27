@@ -3,6 +3,8 @@ import jwt from "jsonwebtoken";
 import pool from "../../db/pool";
 import { slugify } from "../utils/slugify";
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 
 /* ------------ Auth helper copied to match your profileController style ------------ */
 function authUserIdOr401(req: Request, res: Response): number | null {
@@ -42,6 +44,40 @@ function parseDurationToSeconds(s?: string): number | null {
   return null;
 }
 
+// Save base64 image to uploads folder and return the URL path
+function saveBase64Image(base64Data: string, channelSlug: string): string | null {
+  if (!base64Data) return null;
+
+  try {
+    // Extract mime type and data from base64 string
+    const matches = base64Data.match(/^data:image\/(\w+);base64,(.+)$/);
+    if (!matches) return null;
+
+    const extension = matches[1];
+    const data = matches[2];
+    const buffer = Buffer.from(data, "base64");
+
+    // Create uploads directory if it doesn't exist
+    const uploadsDir = path.join(__dirname, "../../uploads/thumbnails");
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    // Generate filename
+    const filename = `${channelSlug}-${Date.now()}.${extension}`;
+    const filepath = path.join(uploadsDir, filename);
+
+    // Save file
+    fs.writeFileSync(filepath, buffer);
+
+    // Return URL path
+    return `/uploads/thumbnails/${filename}`;
+  } catch (err) {
+    console.error("Failed to save thumbnail:", err);
+    return null;
+  }
+}
+
 /**
  * Create or update a channel, and (optionally) create a session + lineup.
  * - Associates the channel with the logged-in user (owner_id).
@@ -72,6 +108,7 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       about_text, // Markdown text for About widget
       first_live_at, // When channel first went live
       tags, // Metadata tags for channel discovery
+      thumbnail, // Base64 encoded thumbnail image
     } = req.body as {
       name: string;
       slug?: string;
@@ -101,6 +138,7 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       about_text?: string;
       first_live_at?: string | null;
       tags?: string[];
+      thumbnail?: string;
     };
 
     if (!name && !slug) {
@@ -155,16 +193,20 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       const ingestApp = "live";
       const playbackPath = `/hls/${streamKey}/index.m3u8`;
 
+      // Save thumbnail if provided
+      const thumbnailUrl = thumbnail ? saveBase64Image(thumbnail, slug) : null;
+
       const chResult = await client.query(
         `insert into channels
-           (owner_id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, widgets, about_text, first_live_at, tags, created_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now())
-         returning id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, widgets, about_text, first_live_at, tags, created_at`,
+           (owner_id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, widgets, about_text, first_live_at, tags, thumbnail, created_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14, now())
+         returning id, slug, name, stream_url, stream_key, ingest_app, playback_path, display_name, channel_number, widgets, about_text, first_live_at, tags, thumbnail, created_at`,
         [uid, slug, name ?? slug, stream_url ?? null, streamKey, ingestApp, playbackPath, display_name ?? null, channel_number ?? null,
          widgets ? JSON.stringify(widgets) : null,
          about_text ?? null,
          first_live_at ?? null,
-         tags && tags.length > 0 ? tags : null]
+         tags && tags.length > 0 ? tags : null,
+         thumbnailUrl]
       );
       channel = chResult.rows[0];
     }
@@ -614,7 +656,7 @@ export async function getMyChannels(req: Request, res: Response): Promise<void> 
        c.stream_url,
        null::text as description,
        false as "isLive",
-       null::text as thumbnail,
+       c.thumbnail,
        s.id as session_id,
        s.event_type
      FROM channels c

@@ -37,8 +37,11 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 4000;
 
 // Middleware
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Increased limit for base64 images
 app.use(cors());
+
+// Serve uploaded files
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Routes
 app.use(express.urlencoded({ extended: false }));
