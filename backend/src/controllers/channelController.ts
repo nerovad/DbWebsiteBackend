@@ -392,7 +392,7 @@ export async function getChannel(req: Request, res: Response, next: NextFunction
     const slug = String(req.params.slug);
     const { rows } = await pool.query(
       `select c.id, c.slug, c.name, c.stream_url, c.stream_key, c.ingest_app, c.playback_path,
-              c.display_name, c.channel_number, c.widgets, c.about_text, c.first_live_at, c.created_at,
+              c.display_name, c.channel_number, c.widgets, c.about_text, c.first_live_at, c.thumbnail, c.created_at,
               u.username as owner_name
        from channels c
        left join users u on c.owner_id = u.id
