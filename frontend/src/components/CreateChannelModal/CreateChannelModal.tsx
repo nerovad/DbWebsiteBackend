@@ -8,10 +8,16 @@ interface Props {
   excludeClickId?: string;
 }
 
+type RecurrenceType = 'once' | 'daily' | 'weekly' | 'weekdays' | 'weekends';
+
 type ScheduleItem = {
   title: string;
-  scheduled_at: string;
-  duration: string; // Timecode format: HH:MM:SS or MM:SS
+  scheduled_at: string;        // Start date (and time for 'once')
+  duration: string;            // Timecode format: HH:MM:SS or MM:SS
+  recurrence_type: RecurrenceType;
+  recurrence_days?: number[];  // For 'weekly': [0,1,2,3,4,5,6] where 0=Sun
+  recurrence_end_date?: string; // Optional end date (YYYY-MM-DD)
+  air_time?: string;           // HH:MM for recurring shows
 };
 
 type WidgetConfig = {
@@ -19,7 +25,17 @@ type WidgetConfig = {
   order: number;
 };
 
-const emptyScheduleItem: ScheduleItem = { title: "", scheduled_at: "", duration: "" };
+const emptyScheduleItem: ScheduleItem = {
+  title: "",
+  scheduled_at: "",
+  duration: "",
+  recurrence_type: "once",
+  recurrence_days: [],
+  recurrence_end_date: "",
+  air_time: "",
+};
+
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // Convert timecode (HH:MM:SS or MM:SS) to seconds
 const timecodeToSeconds = (timecode: string): number | null => {
@@ -92,8 +108,8 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, onChannelCreated
   const [takenChannelNumbers, setTakenChannelNumbers] = useState<Set<number>>(new Set());
   const [loadingChannels, setLoadingChannels] = useState(false);
 
-  // Generate available channel numbers (2-200), excluding taken ones
-  const availableChannels = Array.from({ length: 199 }, (_, i) => i + 2)
+  // Generate available channel numbers (2-101), excluding taken ones
+  const availableChannels = Array.from({ length: 100 }, (_, i) => i + 2)
     .filter(num => !takenChannelNumbers.has(num));
 
   // Auto-generate internal name from channel number
@@ -254,6 +270,10 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, onChannelCreated
           title: item.title.trim(),
           scheduled_at: new Date(item.scheduled_at).toISOString(),
           duration_seconds: timecodeToSeconds(item.duration),
+          recurrence_type: item.recurrence_type || 'once',
+          recurrence_days: item.recurrence_type === 'weekly' ? item.recurrence_days : null,
+          recurrence_end_date: item.recurrence_end_date || null,
+          air_time: item.recurrence_type !== 'once' ? item.air_time : null,
         }));
 
       // Convert thumbnail to base64 if present
@@ -325,46 +345,42 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, onChannelCreated
         <h2 id="create-channel-title">Create Channel</h2>
 
         <form className="create-channel-form" onSubmit={handleSubmit}>
-          {/* Channel Number Dropdown */}
-          <div className="row">
-            <label htmlFor="channel-number">Channel Number</label>
-            <select
-              ref={firstFieldRef}
-              id="channel-number"
-              value={channelNumber}
-              onChange={(e) => setChannelNumber(e.target.value)}
-              required
-              disabled={loadingChannels}
-            >
-              <option value="">
-                {loadingChannels ? "Loading available channels..." : "Select a channel number..."}
-              </option>
-              {availableChannels.map(num => (
-                <option key={num} value={num}>
-                  Channel {num}
-                </option>
-              ))}
-            </select>
-            {!loadingChannels && availableChannels.length === 0 && (
-              <small className="form-hint" style={{ color: '#ff6b6b' }}>
-                All channel numbers are taken.
-              </small>
-            )}
-          </div>
-
-          {/* Display Name */}
-          <div className="row">
-            <label htmlFor="display-name">Channel Display Name</label>
-            <input
-              id="display-name"
-              type="text"
-              placeholder="e.g., Cinema, Horror Marathon..."
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value.slice(0, 20))}
-              maxLength={20}
-              required
-            />
-            <small className="form-hint">{displayName.length}/20 characters</small>
+          {/* Channel Number + Display Name Row */}
+          <div className="row channel-name-row">
+            <div className="channel-number-field">
+              <label htmlFor="channel-number">Channel #</label>
+              <select
+                ref={firstFieldRef}
+                id="channel-number"
+                value={channelNumber}
+                onChange={(e) => setChannelNumber(e.target.value)}
+                required
+                disabled={loadingChannels}
+              >
+                <option value="">{loadingChannels ? "..." : "#"}</option>
+                {availableChannels.map(num => (
+                  <option key={num} value={num}>{num}</option>
+                ))}
+              </select>
+              {!loadingChannels && availableChannels.length === 0 && (
+                <small className="form-hint" style={{ color: '#ff6b6b' }}>
+                  All taken
+                </small>
+              )}
+            </div>
+            <div className="display-name-field">
+              <label htmlFor="display-name">Channel Display Name</label>
+              <input
+                id="display-name"
+                type="text"
+                placeholder="e.g., Cinema, Horror Marathon..."
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value.slice(0, 20))}
+                maxLength={20}
+                required
+              />
+              <small className="form-hint">{displayName.length}/20 characters</small>
+            </div>
           </div>
 
           {/* Tags */}
@@ -505,6 +521,14 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, onChannelCreated
                 <div className="schedule-table">
                   {scheduleItems.map((item, idx) => (
                     <div key={idx} className="schedule-row">
+                      <button
+                        type="button"
+                        className="schedule-remove-btn"
+                        aria-label="Remove time slot"
+                        onClick={() => removeScheduleRow(idx)}
+                      >
+                        ✕
+                      </button>
                       <div className="schedule-fields-grid">
                         <div className="schedule-field">
                           <label>Program Title</label>
@@ -516,12 +540,20 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, onChannelCreated
                           />
                         </div>
                         <div className="schedule-field">
-                          <label>Air Date & Time</label>
-                          <input
-                            type="datetime-local"
-                            value={item.scheduled_at}
-                            onChange={(e) => updateScheduleItem(idx, { scheduled_at: e.target.value })}
-                          />
+                          <label>Recurrence</label>
+                          <select
+                            value={item.recurrence_type}
+                            onChange={(e) => updateScheduleItem(idx, {
+                              recurrence_type: e.target.value as RecurrenceType,
+                              recurrence_days: e.target.value === 'weekly' ? [] : undefined
+                            })}
+                          >
+                            <option value="once">Once</option>
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="weekdays">Weekdays (Mon-Fri)</option>
+                            <option value="weekends">Weekends (Sat-Sun)</option>
+                          </select>
                         </div>
                         <div className="schedule-field duration-field">
                           <label>Duration</label>
@@ -537,16 +569,63 @@ const CreateChannelModal: React.FC<Props> = ({ isOpen, onClose, onChannelCreated
                           />
                         </div>
                       </div>
-                      <div className="schedule-row-actions">
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          aria-label="Remove time slot"
-                          onClick={() => removeScheduleRow(idx)}
-                        >
-                          ✕ Remove
-                        </button>
+
+                      {/* Weekly day selector */}
+                      {item.recurrence_type === 'weekly' && (
+                        <div className="recurrence-days">
+                          <label>Days:</label>
+                          <div className="day-checkboxes">
+                            {DAY_LABELS.map((day, dayIdx) => (
+                              <label key={dayIdx} className="day-checkbox">
+                                <input
+                                  type="checkbox"
+                                  checked={item.recurrence_days?.includes(dayIdx) || false}
+                                  onChange={(e) => {
+                                    const days = item.recurrence_days || [];
+                                    const newDays = e.target.checked
+                                      ? [...days, dayIdx].sort()
+                                      : days.filter(d => d !== dayIdx);
+                                    updateScheduleItem(idx, { recurrence_days: newDays });
+                                  }}
+                                />
+                                <span>{day}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="schedule-fields-grid">
+                        <div className="schedule-field">
+                          <label>{item.recurrence_type === 'once' ? 'Air Date & Time' : 'Start Date'}</label>
+                          <input
+                            type={item.recurrence_type === 'once' ? 'datetime-local' : 'date'}
+                            value={item.recurrence_type === 'once' ? item.scheduled_at : item.scheduled_at.split('T')[0]}
+                            onChange={(e) => updateScheduleItem(idx, { scheduled_at: e.target.value })}
+                          />
+                        </div>
+                        {item.recurrence_type !== 'once' && (
+                          <>
+                            <div className="schedule-field">
+                              <label>Air Time</label>
+                              <input
+                                type="time"
+                                value={item.air_time || ''}
+                                onChange={(e) => updateScheduleItem(idx, { air_time: e.target.value })}
+                              />
+                            </div>
+                            <div className="schedule-field">
+                              <label>End Date (optional)</label>
+                              <input
+                                type="date"
+                                value={item.recurrence_end_date || ''}
+                                onChange={(e) => updateScheduleItem(idx, { recurrence_end_date: e.target.value })}
+                              />
+                            </div>
+                          </>
+                        )}
                       </div>
+
                     </div>
                   ))}
                 </div>

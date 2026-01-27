@@ -512,13 +512,41 @@
   }
 
   .schedule-row {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
     padding: 1rem;
+    padding-top: 0.75rem;
     background: rgba($secondary-color, 0.05);
     border: 2px solid $border-color-primary;
     border-radius: 8px;
+
+    .schedule-remove-btn {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      border: none;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      color: $text-color-secondary;
+      font-size: 0.75rem;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      &:hover {
+        background: rgba(#ff4d4d, 0.2);
+        color: #ff4d4d;
+      }
+    }
 
     .schedule-fields-grid {
       display: grid;
@@ -580,36 +608,6 @@
         font-family: monospace;
         text-align: center;
         letter-spacing: 1px;
-      }
-    }
-
-    .schedule-row-actions {
-      display: flex;
-      justify-content: flex-end;
-      padding-top: 0.5rem;
-      border-top: 1px solid rgba($border-color-primary, 0.5);
-    }
-
-    .icon-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 44px;
-      padding: 0.5rem 0.75rem;
-      border-radius: 6px;
-      border: 2px solid $border-color-primary;
-      background: $background-color-primary;
-      color: $text-color-primary;
-      font-weight: 800;
-      font-size: 0.85rem;
-      cursor: pointer;
-      transition: all 0.2s ease;
-
-      &:hover {
-        border-color: #ff4d4d;
-        color: #ff4d4d;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 10px rgba(#ff4d4d, 0.2);
       }
     }
   }
@@ -695,9 +693,76 @@
   }
 }
 
+/* === Recurrence Day Selector === */
+.recurrence-days {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  flex-wrap: wrap;
+
+  > label {
+    font-size: 0.85rem;
+    color: $text-color-secondary;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 0;
+  }
+
+  .day-checkboxes {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+  }
+
+  .day-checkbox {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+
+    input[type="checkbox"] {
+      width: 1.25rem;
+      height: 1.25rem;
+      accent-color: $secondary-color;
+      cursor: pointer;
+      margin: 0;
+    }
+
+    span {
+      font-size: 0.75rem;
+      color: $text-color-secondary;
+      margin-top: 0.2rem;
+    }
+
+    &:hover span {
+      color: $secondary-color;
+    }
+
+    &:has(input:checked) span {
+      color: $secondary-color;
+      font-weight: 600;
+    }
+  }
+}
+
 @media (max-width: 600px) {
   .schedule-editor .schedule-row .schedule-fields-grid {
     grid-template-columns: 1fr;
+  }
+
+  .recurrence-days {
+    flex-direction: column;
+    align-items: flex-start;
+
+    .day-checkboxes {
+      width: 100%;
+      justify-content: space-between;
+    }
   }
 }
 

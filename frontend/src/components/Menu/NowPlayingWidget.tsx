@@ -13,6 +13,8 @@ interface ScheduleItem {
   scheduled_at: string;
   duration_seconds: number | null;
   status: 'scheduled' | 'airing' | 'completed';
+  is_recurring_instance?: boolean;
+  original_id?: number;
 }
 
 interface ScheduleData {
@@ -51,11 +53,22 @@ const NowPlayingWidget: React.FC<Props> = ({ channelId }) => {
   if (!data) return <div className="schedule-error">No schedule available</div>;
 
   const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString('en-US', {
+    const date = new Date(dateString);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+    const isTomorrow = date.toDateString() === new Date(now.getTime() + 86400000).toDateString();
+
+    const timeStr = date.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true
     });
+
+    if (isToday) return timeStr;
+    if (isTomorrow) return `Tomorrow ${timeStr}`;
+
+    const dayStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    return `${dayStr} ${timeStr}`;
   };
 
   const formatDuration = (seconds: number | null) => {
@@ -88,8 +101,8 @@ const NowPlayingWidget: React.FC<Props> = ({ channelId }) => {
         <div className="up-next-section">
           <h3>⏭️ Up Next</h3>
           <div className="schedule-list">
-            {data.up_next.map(item => (
-              <div key={item.id} className="schedule-item">
+            {data.up_next.map((item, index) => (
+              <div key={item.is_recurring_instance ? `${item.original_id}-${item.scheduled_at}` : item.id} className="schedule-item">
                 <div className="item-time">{formatTime(item.scheduled_at)}</div>
                 <div className="item-info">
                   <strong>{item.film_title || item.title}</strong>

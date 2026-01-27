@@ -671,6 +671,80 @@ export async function getMyChannels(req: Request, res: Response): Promise<void> 
 
 /* ===== NEW: Channel Schedule Endpoints ===== */
 
+// Helper: Expand recurring schedule items into individual occurrences
+function expandRecurringItems(items: any[], daysAhead: number = 7): any[] {
+  const now = new Date();
+  const endDate = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
+  const expanded: any[] = [];
+
+  for (const item of items) {
+    const recurrenceType = item.recurrence_type || 'once';
+
+    if (recurrenceType === 'once') {
+      // Non-recurring item, include as-is
+      expanded.push(item);
+      continue;
+    }
+
+    // Recurring item - expand to individual occurrences
+    const startDate = new Date(item.scheduled_at);
+    const airTime = item.air_time || '00:00';
+    const [hours, minutes] = airTime.split(':').map(Number);
+    const recurrenceEndDate = item.recurrence_end_date ? new Date(item.recurrence_end_date) : null;
+
+    // Get days of week for this recurrence type
+    let daysOfWeek: number[];
+    switch (recurrenceType) {
+      case 'daily':
+        daysOfWeek = [0, 1, 2, 3, 4, 5, 6];
+        break;
+      case 'weekdays':
+        daysOfWeek = [1, 2, 3, 4, 5]; // Mon-Fri
+        break;
+      case 'weekends':
+        daysOfWeek = [0, 6]; // Sun, Sat
+        break;
+      case 'weekly':
+        daysOfWeek = item.recurrence_days || [];
+        break;
+      default:
+        daysOfWeek = [];
+    }
+
+    // Generate occurrences for each day in the range
+    const currentDate = new Date(Math.max(startDate.getTime(), now.getTime() - 24 * 60 * 60 * 1000));
+    currentDate.setHours(0, 0, 0, 0);
+
+    while (currentDate <= endDate) {
+      // Check if this day matches the recurrence pattern
+      const dayOfWeek = currentDate.getDay();
+
+      if (daysOfWeek.includes(dayOfWeek)) {
+        // Check if within the recurrence period
+        if (currentDate >= startDate && (!recurrenceEndDate || currentDate <= recurrenceEndDate)) {
+          const occurrenceTime = new Date(currentDate);
+          occurrenceTime.setHours(hours, minutes, 0, 0);
+
+          // Create expanded occurrence
+          expanded.push({
+            ...item,
+            scheduled_at: occurrenceTime.toISOString(),
+            is_recurring_instance: true,
+            original_id: item.id,
+          });
+        }
+      }
+
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+  }
+
+  // Sort by scheduled_at
+  expanded.sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
+
+  return expanded;
+}
+
 // GET /api/channels/:slug/schedule - Get channel schedule
 export async function getChannelSchedule(req: Request, res: Response): Promise<void> {
   const { slug } = req.params;
@@ -689,7 +763,7 @@ export async function getChannelSchedule(req: Request, res: Response): Promise<v
 
     const now = new Date();
 
-    // Get ALL schedule items for this channel
+    // Get ALL schedule items for this channel (including recurrence fields)
     const allResult = await client.query(
       `SELECT cs.*,
               COALESCE(f.title, cs.title) as display_title,
@@ -712,11 +786,14 @@ export async function getChannelSchedule(req: Request, res: Response): Promise<v
       return;
     }
 
+    // Expand recurring items into individual occurrences for the next 7 days
+    const expandedItems = expandRecurringItems(allResult.rows, 7);
+
     // Separate into now playing and up next
     let nowPlaying = null;
     const upNext: any[] = [];
 
-    for (const item of allResult.rows) {
+    for (const item of expandedItems) {
       const scheduledTime = new Date(item.scheduled_at);
       const endTime = item.duration_seconds
         ? new Date(scheduledTime.getTime() + item.duration_seconds * 1000)
@@ -732,8 +809,8 @@ export async function getChannelSchedule(req: Request, res: Response): Promise<v
     }
 
     // If nothing is currently airing, use the most recent past item
-    if (!nowPlaying && allResult.rows.length > 0) {
-      const pastItems = allResult.rows.filter(item => new Date(item.scheduled_at) <= now);
+    if (!nowPlaying && expandedItems.length > 0) {
+      const pastItems = expandedItems.filter(item => new Date(item.scheduled_at) <= now);
       if (pastItems.length > 0) {
         nowPlaying = pastItems[pastItems.length - 1];
       }
@@ -749,7 +826,7 @@ export async function getChannelSchedule(req: Request, res: Response): Promise<v
     res.json({
       now_playing: nowPlaying,
       up_next: upNext.slice(0, 5), // Limit to 5 upcoming
-      schedule: allResult.rows
+      schedule: allResult.rows // Return raw items (not expanded) for editing
     });
   } catch (error) {
     console.error('Error fetching schedule:', error);
@@ -779,7 +856,7 @@ export async function updateChannelSchedule(req: Request, res: Response): Promis
     return;
   }
 
-  const { schedule } = req.body; // Array of {film_id, title, scheduled_at, duration_seconds}
+  const { schedule } = req.body; // Array of {film_id, title, scheduled_at, duration_seconds, recurrence_type, recurrence_days, recurrence_end_date, air_time}
 
   console.log('Update schedule request:', { slug, uid, scheduleCount: schedule?.length });
   console.log('Schedule items:', JSON.stringify(schedule, null, 2));
@@ -858,20 +935,38 @@ export async function updateChannelSchedule(req: Request, res: Response): Promis
         film_id: item.film_id || null,
         title: title || null,
         scheduled_at: item.scheduled_at,
-        duration_seconds: item.duration_seconds || null
+        duration_seconds: item.duration_seconds || null,
+        recurrence_type: item.recurrence_type || 'once',
+        recurrence_days: item.recurrence_days || null,
+        recurrence_end_date: item.recurrence_end_date || null,
+        air_time: item.air_time || null
       });
 
       const insertResult = await client.query(
         `INSERT INTO channel_schedule
-           (channel_id, film_id, title, scheduled_at, duration_seconds, status)
-         VALUES ($1, $2, $3, $4, $5, 'scheduled')
+           (channel_id, film_id, title, scheduled_at, duration_seconds, status, recurrence_type, recurrence_days, recurrence_end_date, air_time)
+         VALUES ($1, $2, $3, $4, $5, 'scheduled', $6, $7, $8, $9)
          ON CONFLICT (channel_id, scheduled_at)
          DO UPDATE SET
            film_id = EXCLUDED.film_id,
            title = EXCLUDED.title,
-           duration_seconds = EXCLUDED.duration_seconds
+           duration_seconds = EXCLUDED.duration_seconds,
+           recurrence_type = EXCLUDED.recurrence_type,
+           recurrence_days = EXCLUDED.recurrence_days,
+           recurrence_end_date = EXCLUDED.recurrence_end_date,
+           air_time = EXCLUDED.air_time
          RETURNING id`,
-        [channel.id, item.film_id || null, title || null, item.scheduled_at, item.duration_seconds || null]
+        [
+          channel.id,
+          item.film_id || null,
+          title || null,
+          item.scheduled_at,
+          item.duration_seconds || null,
+          item.recurrence_type || 'once',
+          item.recurrence_days || null,
+          item.recurrence_end_date || null,
+          item.air_time || null
+        ]
       );
 
       console.log('Insert successful, returned id:', insertResult.rows[0]?.id);
