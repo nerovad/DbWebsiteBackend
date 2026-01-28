@@ -24,6 +24,14 @@ const NewsTicker: React.FC = () => {
     setIsMinimized(!isMinimized);
   };
 
+  // Set CSS variable for other components to adjust their height
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      '--ticker-height',
+      isMinimized ? '0px' : '50px'
+    );
+  }, [isMinimized]);
+
   return (
     <div className={`news-ticker ${isMinimized ? "minimized" : ""}`}>
       <button

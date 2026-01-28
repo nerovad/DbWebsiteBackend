@@ -11,11 +11,11 @@ $lava-purple-accent: rgba(color.adjust($primary-color, $lightness: 15%), 0.3);
 .utilities-container {
   position: fixed;
   font-family: $primary-font-family;
-  top: 50px; 
+  top: 50px;
   left: 0;
-  height: calc(100vh - 100px);
+  height: calc(100vh - 50px - var(--ticker-height, 50px));
   background-color: $background-color-primary;
-  transition: width 0.3s ease-in-out;
+  transition: width 0.3s ease-in-out, height 0.3s ease-in-out;
   overflow-y: hidden;
   overflow-x: hidden;
   z-index: 1000;

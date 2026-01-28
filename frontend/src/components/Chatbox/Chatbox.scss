@@ -5,13 +5,13 @@
 .chatbox-container {
   font-family: $primary-font-family;
   position: fixed;
-  top: 50px; 
-  right: 0; 
-  height: calc(100vh - 100px);
+  top: 50px;
+  right: 0;
+  height: calc(100vh - 50px - var(--ticker-height, 50px));
   background-color: $background-color-primary;
-  transition: width 0.3s ease-in-out;
+  transition: width 0.3s ease-in-out, height 0.3s ease-in-out;
   z-index: 10000;
-  box-shadow: -2px 0 5px rgba(0, 0, 0, 0.5); 
+  box-shadow: -2px 0 5px rgba(0, 0, 0, 0.5);
   min-width: 30px;
 
   &.open {
@@ -55,9 +55,11 @@
 
 .chatbox-content {
   font-family: inherit;
-  height: 90vh;
+  height: 100%;
   overflow-y: auto;
   padding: 0rem 1rem;
+  padding-bottom: 1rem;
+  box-sizing: border-box;
   background-color: $background-color-primary;
   color: white;
   opacity: 0;
