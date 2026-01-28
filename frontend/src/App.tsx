@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./store/AuthContext";
 import NavBar from "./components/Navigation/Navigation.tsx";
@@ -22,14 +22,12 @@ const MainLayout: React.FC<{
   setIsChatOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isGuideOpen: boolean;
   setIsGuideOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  isLoggedIn: boolean;
-  setIsLoggedIn: React.Dispatch<React.SetStateAction<boolean>>;
   videoControls: any;
   isAuthOpen: boolean;
   setIsAuthOpen: React.Dispatch<React.SetStateAction<boolean>>;
   authMode: "login" | "register";
   setAuthMode: React.Dispatch<React.SetStateAction<"login" | "register">>;
-  channelSlug?: string; // ✅ New prop for channel routing
+  channelSlug?: string;
 }> = ({
   isMenuOpen,
   isChatOpen,
@@ -37,8 +35,6 @@ const MainLayout: React.FC<{
   setIsChatOpen,
   isGuideOpen,
   setIsGuideOpen,
-  isLoggedIn,
-  setIsLoggedIn,
   videoControls,
   isAuthOpen,
   setIsAuthOpen,
@@ -48,8 +44,6 @@ const MainLayout: React.FC<{
 }) => (
     <>
       <NavBar
-        isLoggedIn={isLoggedIn}
-        setIsLoggedIn={setIsLoggedIn}
         setIsGuideOpen={setIsGuideOpen}
         setIsAuthOpen={setIsAuthOpen}
         setAuthMode={setAuthMode}
@@ -77,7 +71,6 @@ const App: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(true);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem("token"));
 
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
@@ -94,14 +87,6 @@ const App: React.FC = () => {
     loadVideo: () => { },
     setVideoControls: (controls: any) => setVideoControls((prev) => ({ ...prev, ...controls })),
   });
-
-  useEffect(() => {
-    const checkLogin = () => setIsLoggedIn(!!localStorage.getItem("token"));
-    window.addEventListener("storage", checkLogin);
-    return () => {
-      window.removeEventListener("storage", checkLogin);
-    };
-  }, []);
 
   return (
     <AuthProvider>
@@ -125,10 +110,8 @@ const App: React.FC = () => {
                 setIsAuthOpen={setIsAuthOpen}
                 authMode={authMode}
                 setAuthMode={setAuthMode}
-                isLoggedIn={isLoggedIn}
-                setIsLoggedIn={setIsLoggedIn}
                 videoControls={videoControls}
-                channelSlug={undefined} // Will be extracted in VideoPlayer via useParams
+                channelSlug={undefined}
               />
             }
           />
@@ -145,7 +128,6 @@ const App: React.FC = () => {
 
         {isAuthOpen && (
           <Auth
-            setIsLoggedIn={setIsLoggedIn}
             setIsAuthOpen={setIsAuthOpen}
             authMode={authMode}
             setAuthMode={setAuthMode}

@@ -14,8 +14,6 @@ import { useAuth } from "../../store/AuthContext";
 type VideoLinkType = { src: string; channel: string; channelNumber: number; displayName?: string; tags?: string[] };
 
 interface NavBarProps {
-  isLoggedIn: boolean;
-  setIsLoggedIn: React.Dispatch<React.SetStateAction<boolean>>;
   currentIndex: number;
   setCurrentIndex: React.Dispatch<React.SetStateAction<number>>;
   videoLinks: VideoLinkType[];
@@ -32,8 +30,6 @@ interface NavBarProps {
 }
 
 const SearchNavBar: React.FC<NavBarProps> = ({
-  isLoggedIn,
-  setIsLoggedIn,
   currentIndex,
   setCurrentIndex,
   videoLinks,
@@ -53,7 +49,7 @@ const SearchNavBar: React.FC<NavBarProps> = ({
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const { setChannelId } = useChatStore();
-  const { user } = useAuth();
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
 
   // Current channel info for placeholder
   const currentChannel = videoLinks[currentIndex];
@@ -104,8 +100,7 @@ const SearchNavBar: React.FC<NavBarProps> = ({
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    setIsLoggedIn(false);
+    logout();
   };
 
   const selectChannel = (channel: VideoLinkType) => {
@@ -211,15 +206,15 @@ const SearchNavBar: React.FC<NavBarProps> = ({
       </div>
       {/* Right Links & Profile/Login */}
       <div className="search-navbar__links">
-        {!isLoggedIn ? (
-          <>
-            <button
-              onClick={() => { setAuthMode("login"); setIsAuthOpen(true); }}
-              className="search-navbar__login-button"
-            >
-              Login
-            </button>
-          </>
+        {isLoading ? (
+          <span className="search-navbar__loading">...</span>
+        ) : !isAuthenticated ? (
+          <button
+            onClick={() => { setAuthMode("login"); setIsAuthOpen(true); }}
+            className="search-navbar__login-button"
+          >
+            Login
+          </button>
         ) : (
           <div className="search-navbar__profile" onClick={() => setShowProfileDropdown(!showProfileDropdown)}>
             <FaUserCircle className="search-navbar__profile-icon" size={24} />

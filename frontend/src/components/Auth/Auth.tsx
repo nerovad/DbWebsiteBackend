@@ -1,15 +1,16 @@
 import React, { useState } from "react";
 import TermsOfService from "./TermsOfService";
+import { useAuth } from "../../store/AuthContext";
 import "./Auth.scss";
 
 interface AuthProps {
-  setIsLoggedIn: React.Dispatch<React.SetStateAction<boolean>>;
   setIsAuthOpen: React.Dispatch<React.SetStateAction<boolean>>;
   authMode: "login" | "register";
   setAuthMode: React.Dispatch<React.SetStateAction<"login" | "register">>;
 }
 
-const Auth: React.FC<AuthProps> = ({ setIsLoggedIn, setIsAuthOpen, authMode, setAuthMode }) => {
+const Auth: React.FC<AuthProps> = ({ setIsAuthOpen, authMode, setAuthMode }) => {
+  const { login } = useAuth();
   const [emailOrUsername, setEmailOrUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -39,55 +40,38 @@ const Auth: React.FC<AuthProps> = ({ setIsLoggedIn, setIsAuthOpen, authMode, set
 
     setSubmitting(true);
     try {
-      const url =
-        authMode === "login"
-          ? "http://localhost:4000/api/auth/login"
-          : "http://localhost:4000/api/auth/register";
-
-      const body =
-        authMode === "login"
-          ? { email: emailOrUsername, username: emailOrUsername, password }
-          : { email, username, password };
-
-      // ADD THESE 3 LINES HERE:
-      console.log("Auth mode:", authMode);
-      console.log("Sending body:", body);
-      console.log("To URL:", url);
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      // Don't call res.json() blindly—404/HTML will crash JSON.parse
-      const text = await res.text();
-
-      // ADD THESE 2 LINES HERE:
-      console.log("Server response status:", res.status);
-      console.log("Server response text:", text);
-
-      let data: any = {};
-      try {
-        data = text ? JSON.parse(text) : {};
-      } catch {
-        // response wasn't JSON (e.g., 404 HTML); leave data as {}
-      }
-
-      if (!res.ok) {
-        const message =
-          data?.error ||
-          data?.message ||
-          `Request failed (${res.status})${text ? `: ${text.slice(0, 200)}` : ""}`;
-        throw new Error(message);
-      }
-
       if (authMode === "login") {
-        if (!data?.token) throw new Error("No token returned from server.");
-        localStorage.setItem("token", data.token);
-        setIsLoggedIn(true);
-        setIsAuthOpen(false);
+        // Use AuthContext's login method - this properly sets user state
+        const success = await login(emailOrUsername, password);
+        if (success) {
+          setIsAuthOpen(false);
+        } else {
+          throw new Error("Login failed. Please check your credentials.");
+        }
       } else {
+        // Registration - keep existing flow
+        const res = await fetch("http://localhost:4000/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, username, password }),
+        });
+
+        const text = await res.text();
+        let data: any = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          // response wasn't JSON
+        }
+
+        if (!res.ok) {
+          const message =
+            data?.error ||
+            data?.message ||
+            `Request failed (${res.status})${text ? `: ${text.slice(0, 200)}` : ""}`;
+          throw new Error(message);
+        }
+
         alert("Registration successful! You can now log in.");
         setAuthMode("login");
       }
@@ -97,7 +81,6 @@ const Auth: React.FC<AuthProps> = ({ setIsLoggedIn, setIsAuthOpen, authMode, set
     } finally {
       setSubmitting(false);
     }
-
   }; return (
     <div className="auth-overlay">
       <div className="auth-card">
