@@ -109,6 +109,7 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       first_live_at, // When channel first went live
       tags, // Metadata tags for channel discovery
       thumbnail, // Base64 encoded thumbnail image
+      schedule, // Schedule items for Now Playing / Up Next widget
     } = req.body as {
       name: string;
       slug?: string;
@@ -139,6 +140,16 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
       first_live_at?: string | null;
       tags?: string[];
       thumbnail?: string;
+      schedule?: Array<{
+        film_id?: number;
+        title?: string;
+        scheduled_at: string;
+        duration_seconds?: number;
+        recurrence_type?: string;
+        recurrence_days?: number[];
+        recurrence_end_date?: string;
+        air_time?: string;
+      }>;
     };
 
     if (!name && !slug) {
@@ -209,6 +220,51 @@ export async function createChannel(req: Request, res: Response, next: NextFunct
          thumbnailUrl]
       );
       channel = chResult.rows[0];
+    }
+
+    // Insert schedule items for Now Playing / Up Next widget if provided
+    if (schedule && Array.isArray(schedule) && schedule.length > 0) {
+      for (const item of schedule) {
+        // Require scheduled_at AND either a title or a film_id
+        if (!item.scheduled_at || (!item.title && !item.film_id)) {
+          continue;
+        }
+
+        // If we have a film_id but no title, look up the film's title
+        let title = item.title;
+        if (item.film_id && !title) {
+          const filmResult = await client.query('SELECT title FROM films WHERE id = $1', [item.film_id]);
+          if (filmResult.rows.length > 0) {
+            title = filmResult.rows[0].title;
+          }
+        }
+
+        await client.query(
+          `INSERT INTO channel_schedule
+             (channel_id, film_id, title, scheduled_at, duration_seconds, status, recurrence_type, recurrence_days, recurrence_end_date, air_time)
+           VALUES ($1, $2, $3, $4, $5, 'scheduled', $6, $7, $8, $9)
+           ON CONFLICT (channel_id, scheduled_at)
+           DO UPDATE SET
+             film_id = EXCLUDED.film_id,
+             title = EXCLUDED.title,
+             duration_seconds = EXCLUDED.duration_seconds,
+             recurrence_type = EXCLUDED.recurrence_type,
+             recurrence_days = EXCLUDED.recurrence_days,
+             recurrence_end_date = EXCLUDED.recurrence_end_date,
+             air_time = EXCLUDED.air_time`,
+          [
+            channel.id,
+            item.film_id || null,
+            title || null,
+            item.scheduled_at,
+            item.duration_seconds || null,
+            item.recurrence_type || 'once',
+            item.recurrence_days || null,
+            item.recurrence_end_date || null,
+            item.air_time || null
+          ]
+        );
+      }
     }
 
     // Optional event + films for session lineup
