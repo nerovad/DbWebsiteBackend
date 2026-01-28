@@ -120,7 +120,8 @@
           border-bottom: none;
         }
 
-        &:hover {
+        &:hover,
+        &--selected {
           background: rgba($primary-color, 0.2);
         }
       }

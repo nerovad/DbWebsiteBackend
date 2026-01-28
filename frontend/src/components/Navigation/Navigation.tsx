@@ -13,6 +13,39 @@ import { useAuth } from "../../store/AuthContext";
 
 type VideoLinkType = { src: string; channel: string; channelNumber: number; displayName?: string; tags?: string[] };
 
+// Fuzzy match function - returns score (higher is better) or -1 if no match
+const fuzzyMatch = (pattern: string, str: string): number => {
+  const patternLower = pattern.toLowerCase();
+  const strLower = str.toLowerCase();
+
+  let patternIdx = 0;
+  let score = 0;
+  let lastMatchIdx = -1;
+
+  for (let i = 0; i < strLower.length && patternIdx < patternLower.length; i++) {
+    if (strLower[i] === patternLower[patternIdx]) {
+      // Bonus for consecutive matches
+      if (lastMatchIdx === i - 1) {
+        score += 10;
+      }
+      // Bonus for matching at start of string or after separator
+      if (i === 0 || strLower[i - 1] === ' ' || strLower[i - 1] === '-' || strLower[i - 1] === '_') {
+        score += 5;
+      }
+      score += 1;
+      lastMatchIdx = i;
+      patternIdx++;
+    }
+  }
+
+  // Return -1 if pattern wasn't fully matched
+  if (patternIdx !== patternLower.length) {
+    return -1;
+  }
+
+  return score;
+};
+
 interface NavBarProps {
   currentIndex: number;
   setCurrentIndex: React.Dispatch<React.SetStateAction<number>>;
@@ -47,6 +80,8 @@ const SearchNavBar: React.FC<NavBarProps> = ({
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [channelInput, setChannelInput] = useState("");
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [selectedResultIndex, setSelectedResultIndex] = useState(0);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const { setChannelId } = useChatStore();
   const { user, isAuthenticated, isLoading, logout } = useAuth();
@@ -57,36 +92,55 @@ const SearchNavBar: React.FC<NavBarProps> = ({
     ? `Ch ${currentChannel.channelNumber}${currentChannel.displayName ? ` - ${currentChannel.displayName}` : ''}`
     : "Search channels...";
 
-  // Search results - filter channels based on input
+  // Search results - filter channels based on input with fuzzy matching
   const searchResults = useMemo(() => {
     const searchTerm = channelInput.trim().toLowerCase();
     if (!searchTerm) return [];
 
-    const results: { channel: VideoLinkType; matchType: 'number' | 'name' | 'tag'; matchedTag?: string }[] = [];
+    const results: { channel: VideoLinkType; matchType: 'number' | 'name' | 'tag'; matchedTag?: string; score: number }[] = [];
 
     videoLinks.forEach(v => {
-      // Check channel number
+      // Check channel number (exact match, highest priority)
       const targetNumber = parseInt(channelInput, 10);
       if (!isNaN(targetNumber) && v.channelNumber === targetNumber) {
-        results.push({ channel: v, matchType: 'number' });
+        results.push({ channel: v, matchType: 'number', score: 1000 });
         return;
       }
 
-      // Check display name
-      if (v.displayName?.toLowerCase().includes(searchTerm)) {
-        results.push({ channel: v, matchType: 'name' });
-        return;
+      // Check display name with fuzzy matching
+      if (v.displayName) {
+        const nameScore = fuzzyMatch(searchTerm, v.displayName);
+        if (nameScore > 0) {
+          results.push({ channel: v, matchType: 'name', score: nameScore });
+          return;
+        }
       }
 
-      // Check tags
-      const matchedTag = v.tags?.find(tag => tag.toLowerCase().includes(searchTerm));
-      if (matchedTag) {
-        results.push({ channel: v, matchType: 'tag', matchedTag });
+      // Check tags with fuzzy matching
+      if (v.tags) {
+        let bestTagScore = -1;
+        let bestTag: string | undefined;
+        for (const tag of v.tags) {
+          const tagScore = fuzzyMatch(searchTerm, tag);
+          if (tagScore > bestTagScore) {
+            bestTagScore = tagScore;
+            bestTag = tag;
+          }
+        }
+        if (bestTagScore > 0 && bestTag) {
+          results.push({ channel: v, matchType: 'tag', matchedTag: bestTag, score: bestTagScore });
+        }
       }
     });
 
-    return results;
+    // Sort by score (highest first)
+    return results.sort((a, b) => b.score - a.score);
   }, [channelInput, videoLinks]);
+
+  // Reset selected index when search results change
+  useEffect(() => {
+    setSelectedResultIndex(0);
+  }, [searchResults]);
 
   // Close search dropdown when clicking outside
   useEffect(() => {
@@ -117,7 +171,7 @@ const SearchNavBar: React.FC<NavBarProps> = ({
 
   const goToChannel = () => {
     if (searchResults.length > 0) {
-      selectChannel(searchResults[0].channel);
+      selectChannel(searchResults[selectedResultIndex].channel);
     } else if (channelInput.trim()) {
       alert(`No channel found matching "${channelInput}"`);
     }
@@ -129,8 +183,40 @@ const SearchNavBar: React.FC<NavBarProps> = ({
   };
 
   const handleInputFocus = () => {
+    setIsSearchFocused(true);
     if (channelInput.trim().length > 0) {
       setShowSearchDropdown(true);
+    }
+  };
+
+  const handleInputBlur = () => {
+    setIsSearchFocused(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSearchDropdown || searchResults.length === 0) {
+      if (e.key === "Enter") goToChannel();
+      return;
+    }
+
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setSelectedResultIndex(prev =>
+          prev < searchResults.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setSelectedResultIndex(prev => (prev > 0 ? prev - 1 : 0));
+        break;
+      case "Enter":
+        e.preventDefault();
+        selectChannel(searchResults[selectedResultIndex].channel);
+        break;
+      case "Escape":
+        setShowSearchDropdown(false);
+        break;
     }
   };
 
@@ -165,9 +251,10 @@ const SearchNavBar: React.FC<NavBarProps> = ({
             value={channelInput}
             onChange={handleInputChange}
             onFocus={handleInputFocus}
-            placeholder={placeholderText}
+            onBlur={handleInputBlur}
+            placeholder={isSearchFocused ? "" : placeholderText}
             className="channel-input"
-            onKeyDown={(e) => e.key === "Enter" && goToChannel()}
+            onKeyDown={handleKeyDown}
           />
           <button className="channel-go-button" onClick={goToChannel}>
             Go
@@ -175,11 +262,12 @@ const SearchNavBar: React.FC<NavBarProps> = ({
 
           {showSearchDropdown && searchResults.length > 0 && (
             <div className="search-dropdown">
-              {searchResults.map(({ channel, matchType, matchedTag }) => (
+              {searchResults.map(({ channel, matchType, matchedTag }, index) => (
                 <div
                   key={channel.channel}
-                  className="search-dropdown__item"
+                  className={`search-dropdown__item ${index === selectedResultIndex ? 'search-dropdown__item--selected' : ''}`}
                   onClick={() => selectChannel(channel)}
+                  onMouseEnter={() => setSelectedResultIndex(index)}
                 >
                   <span className="search-dropdown__channel-number">{channel.channelNumber}</span>
                   <span className="search-dropdown__channel-name">
