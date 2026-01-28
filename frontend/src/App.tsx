@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./store/AuthContext";
+import { useUIStore } from "./store/useUIStore";
+import { useIsMobile } from "./hooks/useIsMobile";
 import NavBar from "./components/Navigation/Navigation.tsx";
 import NewsTicker from "./components/NewsTicker/NewsTicker.tsx";
 import TvGuide from "./components/TvGuide/TvGuide.tsx";
@@ -28,6 +30,7 @@ const MainLayout: React.FC<{
   authMode: "login" | "register";
   setAuthMode: React.Dispatch<React.SetStateAction<"login" | "register">>;
   channelSlug?: string;
+  isMobile: boolean;
 }> = ({
   isMenuOpen,
   isChatOpen,
@@ -40,17 +43,21 @@ const MainLayout: React.FC<{
   setIsAuthOpen,
   authMode,
   setAuthMode,
-  channelSlug
+  channelSlug,
+  isMobile
 }) => (
     <>
       <NavBar
         setIsGuideOpen={setIsGuideOpen}
         setIsAuthOpen={setIsAuthOpen}
         setAuthMode={setAuthMode}
+        isMobile={isMobile}
+        isMenuOpen={isMenuOpen}
+        setIsMenuOpen={setIsMenuOpen}
         {...videoControls}
       />
-      <div className="main-content">
-        <Channels isOpen={isMenuOpen} setIsOpen={setIsMenuOpen} />
+      <div className={`main-content ${isMobile ? 'mobile' : ''}`}>
+        <Channels isOpen={isMenuOpen} setIsOpen={setIsMenuOpen} isMobile={isMobile} />
 
         <VideoPlayer
           isMenuOpen={isMenuOpen}
@@ -58,19 +65,42 @@ const MainLayout: React.FC<{
           setIsGuideOpen={setIsGuideOpen}
           setVideoControls={videoControls.setVideoControls}
           channelSlug={channelSlug} // ✅ Pass channel slug to VideoPlayer
+          isMobile={isMobile}
         />
         <Chatbox isOpen={isChatOpen} setIsOpen={setIsChatOpen} />
       </div>
       <NewsTicker />
+
+      {/* Mobile menu backdrop */}
+      {isMobile && isMenuOpen && (
+        <div className="menu-backdrop" onClick={() => setIsMenuOpen(false)} />
+      )}
 
       {isGuideOpen && <TvGuide isOpen={isGuideOpen} closeGuide={() => setIsGuideOpen(false)} />}
     </>
   );
 
 const App: React.FC = () => {
-  const [isMenuOpen, setIsMenuOpen] = useState(true);
-  const [isChatOpen, setIsChatOpen] = useState(true);
+  const isMobile = useIsMobile();
+  const { setIsMobile } = useUIStore();
+
+  // Sync mobile state to store
+  useEffect(() => {
+    setIsMobile(isMobile);
+  }, [isMobile, setIsMobile]);
+
+  // Start with sidebars closed on mobile, open on desktop
+  const [isMenuOpen, setIsMenuOpen] = useState(!isMobile);
+  const [isChatOpen, setIsChatOpen] = useState(!isMobile);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+
+  // Auto-close sidebars when switching to mobile
+  useEffect(() => {
+    if (isMobile) {
+      setIsMenuOpen(false);
+      setIsChatOpen(false);
+    }
+  }, [isMobile]);
 
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
@@ -112,6 +142,7 @@ const App: React.FC = () => {
                 setAuthMode={setAuthMode}
                 videoControls={videoControls}
                 channelSlug={undefined}
+                isMobile={isMobile}
               />
             }
           />

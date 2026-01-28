@@ -31,11 +31,12 @@ interface VideoPlayerProps {
     loadVideo: (src: string) => void;
   }) => void;
   channelSlug?: string;
+  isMobile?: boolean;
 }
 
 const HLS_BASE = "https://dainbramage.tv:8088";
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ isMenuOpen, isChatOpen, setVideoControls }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ isMenuOpen, isChatOpen, setVideoControls, isMobile = false }) => {
   const { channelSlug } = useParams<{ channelSlug: string }>();
   const navigate = useNavigate();
 
@@ -58,6 +59,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ isMenuOpen, isChatOpen, setVi
   ]);
 
   const getClassNames = () => {
+    // On mobile, don't add margin classes since sidebars overlay
+    if (isMobile) return "mobile";
+
     let classNames = "";
     if (isMenuOpen) classNames += " expanded-left";
     if (isChatOpen) classNames += " expanded-right";

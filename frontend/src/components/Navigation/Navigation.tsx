@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { FaUserCircle, FaVolumeMute, FaExpand, FaTv } from "react-icons/fa";
+import { FaUserCircle, FaBars } from "react-icons/fa";
 import Logo from "../../assets/cinezoo_logo_neon_7.svg";
 import "./Navigation.scss";
 import UpArrow from "../../assets/up_arrow_icon.svg"
@@ -60,13 +60,17 @@ interface NavBarProps {
 
   setIsAuthOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setAuthMode: (mode: "login" | "register") => void;
+
+  // Mobile props
+  isMobile?: boolean;
+  isMenuOpen?: boolean;
+  setIsMenuOpen?: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 const SearchNavBar: React.FC<NavBarProps> = ({
   currentIndex,
   setCurrentIndex,
   videoLinks,
-  videoRef,
   setIsGuideOpen,
   goToNextVideo,
   goToPreviousVideo,
@@ -75,6 +79,9 @@ const SearchNavBar: React.FC<NavBarProps> = ({
   loadVideo,
   setIsAuthOpen,
   setAuthMode,
+  isMobile = false,
+  isMenuOpen = false,
+  setIsMenuOpen,
 }) => {
   const navigate = useNavigate();
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
@@ -221,13 +228,26 @@ const SearchNavBar: React.FC<NavBarProps> = ({
   };
 
   return (
-    <div className="search-navbar">
-      {/* Left Logo */}
-      <div className="search-navbar__left">
-        <a href="/">
-          <img src={Logo} alt="Cinezoo" className="search-navbar__logo" />
-        </a>
-      </div>
+    <div className={`search-navbar ${isMobile ? 'search-navbar--mobile' : ''}`}>
+      {/* Mobile: Hamburger Menu Button */}
+      {isMobile && (
+        <button
+          className="search-navbar__hamburger"
+          onClick={() => setIsMenuOpen?.(!isMenuOpen)}
+          aria-label="Toggle menu"
+        >
+          <FaBars size={20} />
+        </button>
+      )}
+
+      {/* Left Logo - hidden on mobile */}
+      {!isMobile && (
+        <div className="search-navbar__left">
+          <a href="/">
+            <img src={Logo} alt="Cinezoo" className="search-navbar__logo" />
+          </a>
+        </div>
+      )}
 
       {/* Center Controls */}
       <div className="search-navbar__center">
@@ -238,13 +258,17 @@ const SearchNavBar: React.FC<NavBarProps> = ({
           <img src={UpArrow} alt="Next Channel" className="channel-arrow-icon" />
         </button>
 
-        <button
-          className="search-navbar__tv-guide-button"
-          onClick={(e) => { e.preventDefault(); setIsGuideOpen?.((prev) => !prev); }}
-        >
-          <img src={TvGuide} alt="TV Guide" />
-        </button>
+        {/* Hide TV Guide button on mobile - accessible from menu */}
+        {!isMobile && (
+          <button
+            className="search-navbar__tv-guide-button"
+            onClick={(e) => { e.preventDefault(); setIsGuideOpen?.((prev) => !prev); }}
+          >
+            <img src={TvGuide} alt="TV Guide" />
+          </button>
+        )}
 
+        {/* Search bar - shown on all screen sizes */}
         <div className="search-navbar__channel-input-container" ref={searchContainerRef}>
           <input
             type="text"
@@ -292,6 +316,7 @@ const SearchNavBar: React.FC<NavBarProps> = ({
           <img src={Fullscreen} alt="Fullscreen" />
         </button>
       </div>
+
       {/* Right Links & Profile/Login */}
       <div className="search-navbar__links">
         {isLoading ? (
@@ -306,7 +331,7 @@ const SearchNavBar: React.FC<NavBarProps> = ({
         ) : (
           <div className="search-navbar__profile" onClick={() => setShowProfileDropdown(!showProfileDropdown)}>
             <FaUserCircle className="search-navbar__profile-icon" size={24} />
-            <span className="search-navbar__username">{user?.username}</span>
+            {!isMobile && <span className="search-navbar__username">{user?.username}</span>}
             {showProfileDropdown && (
               <div className="profile-dropdown" onClick={(e) => e.stopPropagation()}>
                 <Link to="/profile" className="profile-dropdown__item">My Space</Link>

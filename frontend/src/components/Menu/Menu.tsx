@@ -10,6 +10,7 @@ import NowPlayingWidget from "./NowPlayingWidget";
 interface UtilitiesProps {
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  isMobile?: boolean;
 }
 
 /* === TYPES === */
@@ -253,7 +254,7 @@ const FilmGrid: React.FC<{
   );
 };
 
-const Utilities: React.FC<UtilitiesProps> = ({ isOpen, setIsOpen }) => {
+const Utilities: React.FC<UtilitiesProps> = ({ isOpen, setIsOpen, isMobile = false }) => {
   const [activeModal, setActiveModal] = useState<ModalKind>(null);
   const toggleMenu = () => setIsOpen(!isOpen);
 
@@ -445,13 +446,19 @@ const Utilities: React.FC<UtilitiesProps> = ({ isOpen, setIsOpen }) => {
   return (
     <>
       {/* === SIDEBAR === */}
-      <div className={`utilities-container ${isOpen ? "open" : ""}`}>
+      <div className={`utilities-container ${isOpen ? "open" : ""} ${isMobile ? "mobile" : ""}`}>
         <div className="lava-lamp-bg"></div>
         <button className={`toggle-button-left ${isOpen ? "open" : ""}`} onClick={toggleMenu}>
           <img src={RewindIcon} alt="Toggle" />
         </button>
 
         <div className={`utilities-menu ${isOpen ? "open" : ""}`}>
+          {/* Mobile close button */}
+          {isMobile && (
+            <button className="mobile-close-button" onClick={() => setIsOpen(false)} aria-label="Close menu">
+              ×
+            </button>
+          )}
           <h3>The Pit</h3>
           <ul>
             {utilities.map((u) => (

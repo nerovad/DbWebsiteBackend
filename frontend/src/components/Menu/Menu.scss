@@ -15,7 +15,7 @@ $lava-purple-accent: rgba(color.adjust($primary-color, $lightness: 15%), 0.3);
   left: 0;
   height: calc(100vh - 50px - var(--ticker-height, 50px));
   background-color: $background-color-primary;
-  transition: width 0.3s ease-in-out, height 0.3s ease-in-out;
+  transition: width 0.3s ease-in-out, height 0.3s ease-in-out, transform 0.3s ease-in-out;
   overflow-y: hidden;
   overflow-x: hidden;
   z-index: 1000;
@@ -29,6 +29,27 @@ $lava-purple-accent: rgba(color.adjust($primary-color, $lightness: 15%), 0.3);
   &:not(.open) {
     width: 40px;
     overflow-y: hidden;
+  }
+
+  /* Mobile drawer styles */
+  &.mobile {
+    width: 0;
+    min-width: 0;
+    transform: translateX(-100%);
+    box-shadow: none;
+
+    &.open {
+      width: 80vw;
+      max-width: 300px;
+      transform: translateX(0);
+      overflow-y: auto;
+      box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Hide the toggle button on mobile - use hamburger in navbar instead */
+    .toggle-button-left {
+      display: none;
+    }
   }
 }
 
@@ -72,6 +93,32 @@ $lava-purple-accent: rgba(color.adjust($primary-color, $lightness: 15%), 0.3);
   background: transparent;
   max-width: none;
   max-height: none;
+}
+
+/* Mobile close button */
+.mobile-close-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  font-size: 1.8rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, transform 0.2s ease;
+  z-index: 10;
+  line-height: 1;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+  }
 }
 
 /* Keep your existing menu styles */

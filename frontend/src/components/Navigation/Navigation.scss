@@ -487,3 +487,133 @@
 .search-navbar__logo {
   animation: arcade-flicker 5s infinite;
 }
+
+/* ===== MOBILE STYLES ===== */
+@media (max-width: 768px) {
+  .search-navbar {
+    padding: 0.3rem 0.5rem;
+    gap: 0.25rem;
+
+    &__hamburger {
+      background: transparent;
+      border: none;
+      color: $primary-color;
+      padding: 0.5rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s ease-in-out;
+      flex-shrink: 0;
+
+      &:hover {
+        transform: scale(1.1);
+      }
+    }
+
+    &__left {
+      display: none; // Hide logo on mobile
+    }
+
+    &__center {
+      flex: 1;
+      gap: 0.2rem;
+      justify-content: center;
+    }
+
+    .channel-button {
+      padding: 0.1rem;
+
+      img {
+        width: 28px;
+        height: 28px;
+      }
+    }
+
+    // Search input - compact on mobile
+    &__channel-input-container {
+      min-width: 80px;
+      flex: 1;
+      max-width: 140px;
+      height: 30px;
+      padding: 0.2rem;
+      border-width: 2px;
+
+      input {
+        font-size: 0.8rem;
+        padding-left: 0.3rem;
+
+        &::placeholder {
+          font-size: 0.7rem;
+        }
+      }
+
+      .channel-go-button {
+        font-size: 0.85rem;
+        padding: 3px;
+      }
+
+      .search-dropdown {
+        &__item {
+          padding: 0.5rem 0.6rem;
+        }
+
+        &__channel-number {
+          font-size: 0.8rem;
+          min-width: 24px;
+        }
+
+        &__channel-name {
+          font-size: 0.8rem;
+        }
+
+        &__tag {
+          font-size: 0.7rem;
+        }
+      }
+    }
+
+    .mute-button {
+      padding: 0.1rem;
+      margin-top: 0;
+
+      img {
+        width: 24px;
+        height: 24px;
+      }
+    }
+
+    .fullscreen-button {
+      padding: 0.1rem;
+      margin-top: 0;
+
+      img {
+        width: 26px;
+        height: 28px;
+      }
+    }
+
+    &__links {
+      flex: 0 0 auto;
+      gap: 0.3rem;
+    }
+
+    &__login-button {
+      padding: 4px 8px;
+      font-size: 0.75rem;
+    }
+
+    &__profile {
+      padding: 2px 4px;
+    }
+  }
+}
+
+/* Hamburger button - hidden on desktop, shown on mobile */
+.search-navbar__hamburger {
+  display: none;
+}
+
+.search-navbar--mobile .search-navbar__hamburger {
+  display: flex;
+}

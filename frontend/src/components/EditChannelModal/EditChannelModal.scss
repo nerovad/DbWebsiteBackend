@@ -246,6 +246,178 @@
 @media (max-width: 768px) {
   .edit-channel-content { padding: 16px; }
 }
+
+/* Mobile - iPhone optimization */
+@media (max-width: 480px) {
+  .edit-channel-overlay {
+    padding: 8px;
+  }
+
+  .edit-channel-content {
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 24px);
+    padding: 12px;
+    border-radius: 8px;
+
+    h2 {
+      font-size: 1.1rem;
+      margin-bottom: 8px;
+    }
+  }
+
+  .close-btn {
+    top: 6px;
+    right: 6px;
+    padding: 6px 10px;
+    font-size: 14px;
+  }
+
+  .edit-channel-form {
+    form {
+      gap: 0.75rem;
+    }
+
+    label {
+      font-size: 0.85rem;
+    }
+
+    input,
+    select,
+    textarea {
+      padding: 0.6rem 0.8rem;
+      font-size: 0.9rem;
+    }
+
+    .row {
+      margin-bottom: 0.6rem;
+
+      &.cols-2 {
+        grid-template-columns: 1fr;
+        gap: 0.6rem;
+      }
+    }
+
+    .checkbox-row {
+      span {
+        font-size: 0.85rem;
+      }
+    }
+
+    button[type="submit"] {
+      padding: 0.65rem 1rem;
+      font-size: 0.9rem;
+    }
+
+    .btn-secondary {
+      padding: 0.45rem 0.7rem;
+      font-size: 0.85rem;
+
+      &.small {
+        padding: 0.3rem 0.5rem;
+        font-size: 0.75rem;
+      }
+    }
+
+    .festival-block {
+      padding: 0.75rem;
+      margin-top: 0.75rem;
+    }
+
+    .films-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.5rem;
+
+      h4 {
+        font-size: 0.95rem;
+      }
+    }
+
+    .films-table .film-row {
+      grid-template-columns: 1fr;
+      gap: 0.4rem;
+
+      .icon-btn {
+        width: 100%;
+        justify-content: center;
+        min-height: 36px;
+      }
+    }
+  }
+
+  .section-divider {
+    margin: 1rem 0 0.75rem;
+
+    h3 {
+      font-size: 0.95rem;
+    }
+  }
+
+  .schedule-editor {
+    margin: 1rem 0;
+
+    .schedule-row {
+      padding: 0.75rem;
+      padding-top: 1.5rem;
+
+      .schedule-fields-grid {
+        grid-template-columns: 1fr;
+        gap: 0.6rem;
+      }
+
+      .schedule-field {
+        label {
+          font-size: 0.75rem;
+        }
+
+        input,
+        select {
+          padding: 0.5rem 0.7rem;
+          font-size: 0.85rem;
+        }
+      }
+    }
+
+    .schedule-actions {
+      .btn-secondary,
+      .btn-primary {
+        padding: 0.5rem 0.9rem;
+        font-size: 0.8rem;
+      }
+    }
+  }
+
+  .historical-events {
+    margin: 1rem 0;
+
+    .events-list {
+      max-height: 200px;
+    }
+
+    .event-card {
+      padding: 0.75rem;
+
+      .event-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+
+        strong {
+          font-size: 0.9rem;
+        }
+
+        .status-badge {
+          font-size: 0.7rem;
+          padding: 0.2rem 0.5rem;
+        }
+      }
+
+      .event-details {
+        font-size: 0.8rem;
+      }
+    }
+  }
+}
 /* === NEW: Festival / Event controls === */
 
 .edit-channel-form {

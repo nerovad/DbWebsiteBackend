@@ -12,6 +12,10 @@
   display: flex;
   flex-direction: row;
   height: calc(100vh - 50px);
+
+  &.mobile {
+    flex-direction: column;
+  }
 }
 
 /* Sidebar */
@@ -50,4 +54,28 @@
   }
 }
 
+/* Mobile menu backdrop overlay */
+.menu-backdrop {
+  display: none;
+}
 
+@media (max-width: 768px) {
+  .main-content {
+    flex-direction: column;
+  }
+
+  .menu-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    top: 50px;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+  }
+
+  .video-container-dboriginals {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    width: 100% !important;
+  }
+}

@@ -67,3 +67,27 @@
   transition: opacity 0.3s ease-in-out;
   background: none;
 }
+
+/* Mobile styles - remove margins since sidebars overlay */
+.video-container-dboriginals.mobile {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  width: 100% !important;
+}
+
+@media (max-width: 768px) {
+  .video-container-dboriginals {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    width: 100% !important;
+  }
+
+  .channelnumber {
+    font-size: 40px;
+    left: 16px;
+  }
+
+  .mute-icon-overlay {
+    width: 80px;
+  }
+}
