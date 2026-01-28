@@ -20,14 +20,14 @@ $lava-purple-accent: rgba(color.adjust($primary-color, $lightness: 15%), 0.3);
   overflow-x: hidden;
   z-index: 1000;
   box-shadow: 2px 0 5px rgba(0, 0, 0, 0.5);
-  min-width: 30px;
+  min-width: 0;
 
   &.open {
     width: 250px;
   }
 
   &:not(.open) {
-    width: 40px;
+    width: 0;
     overflow-y: hidden;
   }
 
@@ -54,15 +54,15 @@ $lava-purple-accent: rgba(color.adjust($primary-color, $lightness: 15%), 0.3);
 }
 
 .toggle-button-left {
-  position: absolute;
-  top: 10px;
+  position: fixed;
+  top: 60px;
+  left: 0;
   background-color: transparent;
-  left: calc(100% - 30px);
   border: none;
   cursor: pointer;
-  transition: transform 0.3s;
-  z-index: 10000;
-  transition: transform 0.12s ease-in-out, filter 0.12s ease-in-out;
+  z-index: 10001;
+  padding: 8px;
+  transition: transform 0.12s ease-in-out, filter 0.12s ease-in-out, left 0.3s ease-in-out;
 
   &:hover {
     transform: scale(1.2);
@@ -76,16 +76,19 @@ $lava-purple-accent: rgba(color.adjust($primary-color, $lightness: 15%), 0.3);
     transform: rotate(180deg);
   }
 
-  &.open img {
-    transform: rotate(0deg);
+  &.open {
+    left: 220px;
+
+    img {
+      transform: rotate(0deg);
+    }
   }
 }
 
 /* 🔒 Guard against any global button styles elsewhere */
-.utilities-container .toggle-button-left {
+.toggle-button-left {
   width: auto;
   height: auto;
-  padding: 0;
   margin: 0;
   display: inline-flex;
   align-items: center;

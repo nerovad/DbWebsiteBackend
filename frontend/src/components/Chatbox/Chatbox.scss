@@ -12,29 +12,29 @@
   transition: width 0.3s ease-in-out, height 0.3s ease-in-out;
   z-index: 10000;
   box-shadow: -2px 0 5px rgba(0, 0, 0, 0.5);
-  min-width: 30px;
+  min-width: 0;
 
   &.open {
     width: 250px;
-    overflow-y: auto; 
+    overflow-y: auto;
   }
 
   &:not(.open) {
-    width: 40px;
-    overflow: hidden; 
+    width: 0;
+    overflow: hidden;
   }
 }
 
 .toggle-button-right {
-  position: absolute;
-  top: 10px;
+  position: fixed;
+  top: 60px;
+  right: 0;
   background-color: transparent;
-  right: calc(100% - 30px);
   border: none;
   cursor: pointer;
-  transition: transform 0.3s ease-in-out;
-  z-index: 10000;
-  transition: transform 0.12s ease-in-out, filter 0.12s ease-in-out;
+  z-index: 10001;
+  padding: 8px;
+  transition: transform 0.12s ease-in-out, filter 0.12s ease-in-out, right 0.3s ease-in-out;
 
   &:hover {
     transform: scale(1.2);
@@ -47,9 +47,13 @@
     transition: transform 0.3s ease-in-out;
     transform: rotate(180deg);
   }
-  
-  &.open img {
-    transform: rotate(0deg);
+
+  &.open {
+    right: 220px;
+
+    img {
+      transform: rotate(0deg);
+    }
   }
 }
 
